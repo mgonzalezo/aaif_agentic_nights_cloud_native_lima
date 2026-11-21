@@ -1,0 +1,15 @@
+# Same policy as gateway/agentgateway.yaml, pointing at the in-cluster service.
+mcp:
+  port: 3000
+  policies:
+    mcpAuthorization:
+      rules:
+      - 'mcp.tool.name == "list_issues"'
+      - 'mcp.tool.name == "read_issue"'
+      - 'mcp.tool.name == "read_file"'
+      - 'mcp.tool.name == "create_branch"'
+      - 'mcp.tool.name == "create_pull_request"'
+  targets:
+  - name: forge
+    mcp:
+      host: http://forge-mcp:8765/mcp

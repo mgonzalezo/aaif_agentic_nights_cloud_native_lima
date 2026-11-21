@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  labels: {app: agentgateway}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: agentgateway}}
+  template:
+    metadata:
+      labels: {app: agentgateway}
+    spec:
+      containers:
+      - name: agentgateway
+        image: cr.agentgateway.dev/agentgateway
+        args: ["-f", "/config/config.yaml"]
+        ports: [{containerPort: 3000}]
+        volumeMounts:
+        - {name: config, mountPath: /config}
+      volumes:
+      - name: config
+        configMap: {name: agentgateway-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+spec:
+  type: NodePort
+  selector: {app: agentgateway}
+  ports: [{port: 3000, targetPort: 3000, nodePort: 30300}]

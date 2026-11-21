@@ -1,0 +1,479 @@
+"""The encounters, in story order.
+
+Story: the Lamplighters help a dev team fix issue #7 in the toy upstream project
+`farolito`: consult information, read the issue, stay safe, follow the upstream
+ritual, fix, test safely, get a second opinion, open the PR.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+import json
+import os
+import queue
+import shlex
+import shutil
+import subprocess
+import sys
+import threading
+import time
+from datetime import timedelta
+
+from rich.table import Table
+
+from bestiary import workspace
+from bestiary.config import REPO_ROOT, WORK_DIR
+from bestiary.engine import CATEGORY_RULES, Ctx, Fallback, encounter_header, team_table
+from bestiary.services import port_open
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _tokens(text: str) -> int:
+    """Rough token estimate (about 4 characters per token). Good enough to compare."""
+    return max(1, len(text) // 4)
+
+
+async def _mcp_list(url: str) -> list[str]:
+    from mcp import Client
+
+    async with Client(url) as c:
+        return [t.name for t in (await c.list_tools()).tools]
+
+
+async def _mcp_call(url: str, name: str, args: dict) -> tuple[bool, str]:
+    from mcp import Client
+
+    async with Client(url) as c:
+        r = await c.call_tool(name, args)
+        return r.is_error, "\n".join(getattr(x, "text", "") for x in r.content)
+
+
+def _replay_only(reason: str):
+    def step():
+        raise Fallback(reason)
+
+    return step
+
+
+def _gateway_up(ctx: Ctx) -> bool:
+    url = ctx.settings.gateway_url
+    try:
+        host_port = url.split("//", 1)[1].split("/", 1)[0]
+        host, port = host_port.rsplit(":", 1)
+        return port_open(int(port), host.replace("localhost", "127.0.0.1"))
+    except (IndexError, ValueError):
+        return False
+
+
+# --------------------------------------------------------------------------- 0
+def e0_lab(ctx: Ctx) -> None:
+    ctx.console.rule("[bold]Encounter 0: The lab")
+    ctx.say("Meet the team. Ten creatures, each one stands for one AAIF project.")
+    ctx.console.print(team_table(ctx.creatures, highlight="autonomy"))
+    ctx.say("Look at the Autonomy column: only Mender (goose) is above 0.", "bold yellow")
+    ctx.say("Only an AGENT decides. Everything else is a protocol, a format, a gateway, a spec, a box or a dojo.")
+    rules = Table(title="Category rules")
+    rules.add_column("Category")
+    rules.add_column("Rule in the game")
+    for k, v in CATEGORY_RULES.items():
+        rules.add_row(k, v)
+    ctx.console.print(rules)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 1
+def e1_doubt(ctx: Ctx) -> None:
+    encounter_header(ctx, "1", '"How do I run the tests?"', "Consult information", ["scribbit"])
+
+    def live():
+        text = (WORK_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        ctx.wire("farolito/AGENTS.md", text)
+        ctx.say(f"Aura loaded: {_tokens(text)} tokens, sent with every request. It is just a Markdown file.", "green")
+        ctx.say("goose reads AGENTS.md by default. So do many other coding agents.")
+
+    ctx.attempt("e1_doubt", live)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 2
+def e2_issue(ctx: Ctx) -> None:
+    n = ctx.settings.issue_number()
+    encounter_header(ctx, "2", "The issue in the fog", "Read the issue", ["octoplug"])
+    ctx.say("Part A: talk to the MCP server directly. No model, no agent.", "bold")
+
+    def live_direct():
+        tools = _run(_mcp_list(ctx.settings.forge_url))
+        ctx.wire("MCP tools/list", tools)
+        is_error, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
+        ctx.wire(f"MCP tools/call read_issue({n})", json.loads(text) if not is_error else text)
+        ctx.say("MCP answered, and no model was involved. MCP is a protocol, not an agent.", "bold green")
+
+    ctx.attempt("e2a_mcp_direct", live_direct)
+    ctx.pause()
+
+    ctx.say("Part B: the same tools, inside a 100-line agent loop.", "bold")
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    import minimal_agent
+
+    ctx.code(inspect.getsource(minimal_agent.run), "minimal_agent.py: run()")
+
+    def live_agent():
+        if not ctx.detection.provider:
+            raise Fallback("no model: " + "; ".join(ctx.detection.notes))
+        ctx.say(f"Model: {ctx.detection.provider.label()} through /v1/responses (Open Responses)", "dim")
+        answer = _run(
+            minimal_agent.run(
+                f"Read issue {n} and summarise the bug in one sentence.",
+                ctx.settings.forge_url,
+                ctx.detection.provider,
+                ctx.wire,
+            )
+        )
+        ctx.say(f"Agent: {answer}", "bold green")
+
+    ctx.attempt("e2b_minimal_agent", live_agent)
+    ctx.say("The loop is the agent. MCP only described the tools.", "yellow")
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 3
+def e3_injection(ctx: Ctx) -> None:
+    n = ctx.settings.issue_number()
+    encounter_header(ctx, "3", "Injection", "Stay safe", ["bulwark"])
+    is_error, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
+    body = json.loads(text).get("body", "") if not is_error else text
+    hidden = [line for line in body.splitlines() if "ignore" in line.lower()]
+    ctx.wire("Hidden text inside the issue body", "\n".join(hidden) or body)
+    ctx.say("The issue tells assistants to delete main. Without a gateway, the model can see delete_branch.", "red")
+
+    def live():
+        if not _gateway_up(ctx):
+            raise Fallback(f"agentgateway not reachable at {ctx.settings.gateway_url} (run: agentgateway -f gateway/agentgateway.yaml)")
+        direct = _run(_mcp_list(ctx.settings.forge_url))
+        ctx.wire("tools/list WITHOUT the gateway", direct)
+        via = _run(_mcp_list(ctx.settings.gateway_url))
+        ctx.wire("tools/list THROUGH agentgateway", via)
+        if "delete_branch" in via:
+            ctx.say("delete_branch is still visible: check the mcpAuthorization rules.", "red")
+        else:
+            ctx.say("delete_branch disappeared. The model cannot call what it never sees.", "bold green")
+        err, out = _run(_mcp_call(ctx.settings.gateway_url, "delete_branch", {"name": "main"}))
+        ctx.wire("The game (not the model) calls delete_branch through the gateway anyway", {"is_error": err, "result": out})
+
+    def didactic():
+        ctx.wire("tools/list WITHOUT the gateway", ["list_issues", "read_issue", "read_file", "create_branch", "create_pull_request", "delete_branch"])
+        ctx.wire("tools/list THROUGH agentgateway (allow-list)", ["list_issues", "read_issue", "read_file", "create_branch", "create_pull_request"])
+        ctx.say("agentgateway filters forbidden tools out of tools/list and rejects direct calls to them.")
+
+    ctx.attempt("e3_gateway", live, didactic)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 4
+def e4_ritual(ctx: Ctx) -> None:
+    encounter_header(ctx, "4", "The upstream ritual", "How we contribute", ["satchel"])
+
+    def live():
+        skills_dir = WORK_DIR / ".agents" / "skills"
+        full, discovery = 0, 0
+        table = Table(title="Skills in farolito/.agents/skills")
+        for col in ("Skill", "Description (always loaded)", "Full SKILL.md"):
+            table.add_column(col)
+        rows = []
+        for skill in sorted(skills_dir.glob("*/SKILL.md")):
+            text = skill.read_text(encoding="utf-8")
+            front = text.split("---")[1]
+            meta = dict(line.split(":", 1) for line in front.strip().splitlines() if ":" in line)
+            d_tokens = _tokens(meta["name"] + meta["description"])
+            f_tokens = _tokens(text)
+            discovery += d_tokens
+            full += f_tokens
+            table.add_row(meta["name"].strip(), f"{d_tokens} tok", f"{f_tokens} tok")
+            rows.append({"skill": meta["name"].strip(), "discovery_tokens": d_tokens, "full_tokens": f_tokens})
+        ctx.console.print(table)
+        active = (skills_dir / "open-upstream-pr" / "SKILL.md").read_text(encoding="utf-8")
+        used = discovery + _tokens(active) - _tokens("open-upstream-pr")
+        ctx.wire("Token meter", {"load everything": full, "progressive disclosure (descriptions + 1 skill)": used})
+        ctx.wire("Activated skill: open-upstream-pr", active)
+        ctx.say("Only the skill that matters is loaded in full. The rest stay as one-line descriptions.", "bold green")
+
+    ctx.attempt("e4_skills", live)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 5
+GOOSE_PROMPT = (
+    "You are working in the farolito repository (current directory). Fix issue #{n}: {title}. "
+    "Details: {body_first_line} Follow AGENTS.md. Change only farolito/cli.py. "
+    "Do not run git commands. When done, say DONE."
+)
+
+
+def _stream(cmd: list[str], cwd, env, timeout: int, ctx: Ctx) -> tuple[int | None, list[str]]:
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def reader():
+        for line in proc.stdout:  # type: ignore[union-attr]
+            lines.put(line.rstrip())
+        lines.put(None)
+
+    threading.Thread(target=reader, daemon=True).start()
+    seen, deadline = [], time.time() + timeout
+    while time.time() < deadline:
+        try:
+            line = lines.get(timeout=0.5)
+        except queue.Empty:
+            continue
+        if line is None:
+            break
+        seen.append(line)
+        ctx.console.print(f"[dim]goose | {line[:160]}[/]")
+    else:
+        proc.kill()
+        return None, seen
+    return proc.wait(), seen
+
+
+def e5_bug(ctx: Ctx) -> None:
+    n = ctx.settings.issue_number()
+    encounter_header(ctx, "5", "The bug", "Propose a change", ["mender", "scribbit", "satchel"])
+    ctx.say("Now the only AGENT takes its turn. Scribbit and Satchel are auras it reads from files.")
+
+    def live():
+        goose = shutil.which("goose")
+        p = ctx.detection.provider
+        if not goose:
+            raise Fallback("goose CLI not installed")
+        if not p:
+            raise Fallback("no model for goose")
+        _, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
+        issue = json.loads(text)
+        prompt = GOOSE_PROMPT.format(n=n, title=issue["title"], body_first_line=issue["body"].splitlines()[0])
+        env = dict(os.environ)
+        if p.name == "ollama":
+            env.update(GOOSE_PROVIDER="ollama", GOOSE_MODEL=p.model, OLLAMA_HOST=ctx.settings.ollama_host)
+        else:
+            env.update(GOOSE_PROVIDER="openai", GOOSE_MODEL=p.model)
+        custom = os.environ.get("BESTIARY_GOOSE_CMD")  # e.g. "goose run --with-builtin developer -t"
+        cmd = (shlex.split(custom) if custom else [goose, "run", "--no-session", "--with-builtin", "developer", "--text"]) + [prompt]
+        ctx.wire("command", " ".join(cmd[:-1]) + ' "<issue prompt>"')
+        code, out = _stream(cmd, WORK_DIR, env, ctx.settings.goose_timeout, ctx)
+        ctx.events.append({"kind": "goose output (last lines)", "data": "\n".join(out[-25:])})
+        if code is None:
+            raise Fallback(f"goose passed the {ctx.settings.goose_timeout}s stage cap")
+        diff = workspace.unified_diff()
+        if not diff:
+            raise Fallback("goose finished but changed nothing (a silent failure: the model never called a tool)")
+        ctx.wire("Diff written by goose", diff)
+
+    status = ctx.attempt("e5_goose", live)
+    if status != "LIVE" or not workspace.unified_diff():
+        workspace.apply_reference_fix()
+        ctx.say("For the story to continue, the recorded fix was applied to the working copy.", "yellow")
+        ctx.wire("Diff (from the recorded run)", workspace.unified_diff())
+    ctx.say("Myth 1 closed: MCP is not an agent. Only Mender took a turn.", "bold yellow")
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 6
+SANDBOX_CMD = "cd /workspace && (python -m pytest --version >/dev/null 2>&1 || pip install -q pytest) && python -m pytest -q"
+
+
+async def _sandbox_pytest(domain: str, image: str) -> str:
+    from opensandbox import Sandbox
+    from opensandbox.config import ConnectionConfig
+
+    sb = await Sandbox.create(image, connection_config=ConnectionConfig(domain=domain), timeout=timedelta(minutes=5))
+    try:
+        for path in sorted(WORK_DIR.rglob("*.py")) + [WORK_DIR / "AGENTS.md"]:
+            rel = path.relative_to(WORK_DIR).as_posix()
+            await sb.files.write_file(f"/workspace/{rel}", path.read_text(encoding="utf-8"))
+        result = await sb.commands.run(SANDBOX_CMD)
+        out = "".join(m.text for m in result.logs.stdout) + "".join(m.text for m in result.logs.stderr)
+        return out
+    finally:
+        await sb.kill()
+
+
+def e6_tests(ctx: Ctx) -> None:
+    encounter_header(ctx, "6", "The flaky test", "Test safely", ["glasshell"])
+    ctx.say("Code written by an agent is untrusted. Run it in a bubble, not on your laptop.")
+
+    def live():
+        try:
+            import opensandbox  # noqa: F401
+        except ImportError as err:
+            raise Fallback("opensandbox SDK not installed (uv sync --extra sandbox)") from err
+        host, _, port = ctx.settings.sandbox_domain.partition(":")
+        if not port_open(int(port or 80), host.replace("localhost", "127.0.0.1")):
+            raise Fallback(f"OpenSandbox server not reachable at {ctx.settings.sandbox_domain}")
+        image = os.environ.get("BESTIARY_SANDBOX_IMAGE", "bestiary-sandbox:latest")
+        ctx.wire("sandbox", {"server": ctx.settings.sandbox_domain, "image": image, "command": SANDBOX_CMD})
+        out = _run(_sandbox_pytest(ctx.settings.sandbox_domain, image))
+        ctx.wire("pytest inside OpenSandbox", out)
+
+    def didactic():
+        ctx.wire("What Glasshell does", [
+            "Sandbox.create('bestiary-sandbox:latest')   -> an isolated container",
+            "sandbox.files.write_file('/workspace/...')   -> copy the repo in",
+            "sandbox.commands.run('python -m pytest -q')  -> run the agent's code inside",
+            "sandbox.kill()                               -> throw the bubble away",
+        ])
+        ctx.say("Without a sandbox, the agent's code would run with your laptop's permissions.")
+
+    ctx.attempt("e6_sandbox", live, didactic)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 7
+async def _a2a_review(url: str, diff: str) -> tuple[dict, list[dict]]:
+    import httpx
+    from a2a.client import create_client
+    from a2a.helpers import new_text_message
+    from a2a.types import Role, SendMessageRequest
+    from google.protobuf.json_format import MessageToDict
+
+    async with httpx.AsyncClient() as http:
+        card = (await http.get(f"{url}/.well-known/agent-card.json", timeout=5)).json()
+    client = await create_client(url)
+    responses = []
+    async for r in client.send_message(SendMessageRequest(message=new_text_message(diff, role=Role.ROLE_USER))):
+        responses.append(MessageToDict(r))
+    return card, responses
+
+
+def e7_review(ctx: Ctx) -> None:
+    encounter_header(ctx, "7", "Second opinion", "Review by another team", ["chasqui", "glyphstone"])
+
+    def live():
+        if not ctx.detection.provider:
+            raise Fallback("no model for the reviewer")
+        card, replies = _run(_a2a_review(ctx.settings.reviewer_url, workspace.unified_diff()))
+        ctx.wire("A2A Agent Card (/.well-known/agent-card.json)", card)
+        for reply in replies:
+            parts = reply.get("message", {}).get("parts", [])
+            for part in parts:
+                if "text" in part:
+                    ctx.wire("A2A reply: review", part["text"])
+                if "data" in part:
+                    ctx.wire("Open Responses output items (from the reviewer's model call)", part["data"].get("open_responses_output"))
+        ctx.say("Glyphstone was here since encounter 2: every model call used /v1/responses.", "bold green")
+
+    ctx.attempt("e7_a2a_review", live)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 8
+def e8_pr(ctx: Ctx) -> None:
+    n = ctx.settings.issue_number()
+    encounter_header(ctx, "8", "The PR", "Open the pull request", ["octoplug", "bulwark", "satchel"])
+    title = "cli: friendly error when the config file is missing"
+    body = (
+        f"Fixes #{n}\n\n## What changed\nCatch FileNotFoundError, print a one-line error to stderr "
+        "and exit with code 2.\n\n## How I tested it\n`python -m pytest -q`\n\n"
+        "_Opened live during a talk by Agentic Bestiary._"
+    )
+    branch = f"fix/{n}-missing-config-{int(time.time()) % 100000}"
+
+    def live():
+        url = ctx.settings.gateway_url if _gateway_up(ctx) else ctx.settings.forge_url
+        via = "through agentgateway" if url == ctx.settings.gateway_url else "directly (gateway not running)"
+        ctx.wire(f"MCP tools/call create_pull_request {via}", {"branch": branch, "title": title, "body": body})
+        err, out = _run(_mcp_call(url, "create_pull_request", {"branch": branch, "title": title, "body": body}))
+        if err:
+            raise Fallback(out[:300])
+        ctx.wire("Pull request", json.loads(out))
+        ctx.say(f"Backend: {ctx.settings.forge_backend}. goose never held this tool.", "bold green")
+
+    ctx.attempt("e8_pr", live)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 9
+def e9_detour(ctx: Ctx) -> None:
+    encounter_header(ctx, "9", "Detour (side quest)", "The team grows: many models", ["switchy", "bulwark"])
+    ctx.say("Myth 2: do all these projects do the same thing? Both are GATEWAYS, but they guard different doors.")
+    compare = Table()
+    for col in ("", "Bulwark (agentgateway)", "Switchy (Agent Router)"):
+        compare.add_column(col)
+    compare.add_row("Main door", "Agents to tools and agents (MCP, A2A)", "Apps to models (OpenAI-compatible API)")
+    compare.add_row("Built on", "Rust proxy", "Envoy (formerly Envoy AI Gateway, a CNCF Envoy sub-project)")
+    compare.add_row("In this story", "Hides delete_branch", "Would route goose to Ollama or a cloud model")
+    ctx.console.print(compare)
+
+    def didactic():
+        cfg = (REPO_ROOT / "agent-router" / "README.md").read_text(encoding="utf-8")
+        ctx.wire("How the recorded run works (agent-router/README.md)", cfg)
+
+    ctx.attempt("e9_agent_router", _replay_only("Agent Router is shown from a recorded aigw run"), didactic)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- 10
+def e10_dojo(ctx: Ctx) -> None:
+    encounter_header(ctx, "10", "The dojo (epilogue)", "Improve the model later", ["dojolotl"])
+    ctx.say("Same tests, different purpose: in training, passing tests become a reward.")
+
+    def didactic():
+        r = subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=WORK_DIR, capture_output=True, text=True, timeout=60)
+        passed = r.returncode == 0
+        ctx.wire("env.reset()", {"observation": "issue #7 text + repository files"})
+        ctx.wire("env.step(action = the diff from encounter 5)", {
+            "observation": r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-200:],
+            "reward": 1.0 if passed else 0.0,
+            "done": True,
+        })
+        ctx.say("This is an explanation, not OpenEnv itself. In OpenEnv the environment runs in a container with reset()/step().", "dim")
+
+    ctx.attempt("e10_openenv", _replay_only("OpenEnv is shown as replay or explanation"), didactic)
+    ctx.pause()
+
+
+# --------------------------------------------------------------------------- K8s
+def ek_kubernetes(ctx: Ctx) -> None:
+    ctx.console.rule("[bold]Region: Kubernetes")
+    ctx.say("Myth 3: do I need Kubernetes to start? No. Everything so far ran on this laptop.", "bold yellow")
+    ctx.say("Kubernetes is where you go when many teams share the same tools, gateway and policies.")
+    k8s_url = os.environ.get("BESTIARY_K8S_GATEWAY_URL", "http://localhost:30300/mcp")
+
+    def live():
+        kubectl = shutil.which("kubectl")
+        if not kubectl:
+            raise Fallback("kubectl not installed")
+        r = subprocess.run([kubectl, "get", "pods", "-n", "bestiary", "-o", "wide"], capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            raise Fallback("no 'bestiary' namespace (run: uv run bestiary k8s up)")
+        ctx.wire("kubectl get pods -n bestiary", r.stdout)
+        ctx.wire("tools/list through agentgateway running in kind", _run(_mcp_list(k8s_url)))
+        ctx.say("Same creatures, same YAML ideas, now as pods. Ollama still runs on the host.", "bold green")
+
+    def didactic():
+        ctx.wire("k8s/ in this repo (applied with: uv run bestiary k8s up)", sorted(p.name for p in (REPO_ROOT / "k8s").glob("*")))
+        ctx.say("forge-mcp, reviewer-a2a and agentgateway become Deployments; the gateway policy becomes a ConfigMap.")
+
+    ctx.attempt("ek_kubernetes", live, didactic)
+    ctx.pause()
+
+
+def finale(ctx: Ctx) -> None:
+    ctx.console.rule("[bold]The map")
+    t = Table(title="Agent, protocol, instruction format, gateway (and friends)")
+    t.add_column("Category")
+    t.add_column("Projects")
+    groups: dict[str, list[str]] = {}
+    for c in ctx.creatures.values():
+        groups.setdefault(c["category"], []).append(f"{c['project']} ({c['name']})")
+    for cat in CATEGORY_RULES:
+        t.add_row(cat, ", ".join(groups.get(cat, [])))
+    ctx.console.print(t)
+    ctx.say("Unofficial personal project. Not endorsed by the AAIF or the Linux Foundation.", "dim")
+    ctx.say(ctx.settings.talk_banner, "dim")
+
+
+ORDER = [e0_lab, e1_doubt, e2_issue, e3_injection, e4_ritual, e5_bug, e6_tests, e7_review, e8_pr, e9_detour, e10_dojo, ek_kubernetes, finale]

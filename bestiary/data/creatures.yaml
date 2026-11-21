@@ -1,0 +1,198 @@
+# The ten creatures. Each one "stands for" one AAIF project (nominative use only).
+# Stats are 0-5 and are deliberately coarse. Every stat has a "why" so a viewer can
+# challenge it. Change a number if the "why" stops being true.
+#
+# Stats:
+#   autonomy:  can it decide and act on its own? (only an agent scores above 0)
+#   reach:     how many systems it connects to
+#   control:   how much it limits or governs what happens
+#   startup:   cost to get started on a laptop (0 = a text file, 5 = a cluster)
+
+- id: mender
+  name: Mender
+  animal: mechanic raccoon
+  project: goose
+  category: AGENT
+  joined_aaif: "2025-12-09 (founding project)"
+  stats: {autonomy: 4, reach: 4, control: 2, startup: 1}
+  why:
+    autonomy: "It plans and picks tools by itself in a loop."
+    reach: "Any MCP server can be added as an extension."
+    control: "It follows recipes and permissions, but the model decides each step."
+    startup: "One binary plus a model provider."
+  skills:
+    - {name: Plan, does: "Breaks a task into steps."}
+    - {name: Edit file, does: "Changes code through the developer extension."}
+    - {name: Run recipe, does: "Replays a saved workflow: goose run --recipe."}
+  weakness: "Only as good as its model. It can say it finished without calling any tool."
+  source: https://goose-docs.ai
+
+- id: octoplug
+  name: Octoplug
+  animal: octopus with plugs
+  project: Model Context Protocol (MCP)
+  category: PROTOCOL
+  joined_aaif: "2025-12-09 (founding project)"
+  stats: {autonomy: 0, reach: 3, control: 1, startup: 1}
+  why:
+    autonomy: "A protocol never decides anything. It describes how to ask."
+    reach: "One client can talk to any number of MCP servers."
+    control: "It describes tools; it does not police them."
+    startup: "A small server in any SDK."
+  skills:
+    - {name: tools/list, does: "Asks a server what it can do."}
+    - {name: tools/call, does: "Runs one tool with JSON arguments."}
+    - {name: Resources, does: "Shares files or data with the model."}
+  weakness: "Cannot act alone. It exposes whatever the server offers, good or bad."
+  source: https://modelcontextprotocol.io
+
+- id: chasqui
+  name: Chasqui
+  animal: Andean relay runner
+  project: Agent2Agent (A2A)
+  category: PROTOCOL
+  joined_aaif: "2026-08-17"
+  stats: {autonomy: 0, reach: 3, control: 2, startup: 1}
+  why:
+    autonomy: "It carries tasks between agents; it does not do them."
+    reach: "Any agent with an Agent Card can be reached."
+    control: "Tasks have states (working, completed, failed) both sides can see."
+    startup: "A small HTTP server and a JSON card."
+  skills:
+    - {name: Read card, does: "Fetches /.well-known/agent-card.json."}
+    - {name: Delegate, does: "Sends a task to another team's agent."}
+    - {name: Await status, does: "Follows the task until it completes."}
+  weakness: "Useless with a single agent."
+  source: https://aaif.io/blog/a2a-joins-aaif
+
+- id: scribbit
+  name: Scribbit
+  animal: living notebook
+  project: AGENTS.md
+  category: INSTRUCTION FORMAT
+  joined_aaif: "2025-12-09 (founding project)"
+  stats: {autonomy: 0, reach: 1, control: 1, startup: 0}
+  why:
+    autonomy: "It is a Markdown file."
+    reach: "Read by many coding agents, one repository at a time."
+    control: "Agents read it as guidance, not as enforcement."
+    startup: "Create one text file."
+  skills:
+    - {name: How to run this, does: "Tells any agent the test command."}
+    - {name: Repo rules, does: "States the house rules once, for every agent."}
+  weakness: "Long files cost tokens on every request. Keep it short."
+  source: https://agents.md
+
+- id: satchel
+  name: Satchel
+  animal: backpack with pockets
+  project: Agent Skills
+  category: INSTRUCTION FORMAT
+  joined_aaif: "2026-10-22"
+  stats: {autonomy: 0, reach: 2, control: 1, startup: 0}
+  why:
+    autonomy: "A folder with a SKILL.md file."
+    reach: "Portable across agents that support the format."
+    control: "Loaded on demand, so the agent only sees what it needs."
+    startup: "Create a folder and one Markdown file."
+  skills:
+    - {name: Discover, does: "The agent sees only name and description."}
+    - {name: Activate, does: "Loads the full SKILL.md when it is relevant."}
+    - {name: Use script, does: "Runs a helper script shipped with the skill."}
+  weakness: "Needs an agent that supports it. Bundled scripts are a supply-chain risk."
+  source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
+
+- id: bulwark
+  name: Bulwark
+  animal: guardian armadillo
+  project: agentgateway
+  category: GATEWAY
+  joined_aaif: "2026-06-04"
+  stats: {autonomy: 0, reach: 3, control: 5, startup: 2}
+  why:
+    autonomy: "A proxy applies rules; it never decides the task."
+    reach: "Federates many MCP servers, A2A agents and model APIs behind one endpoint."
+    control: "Per-tool authorization: tools you may not use disappear from tools/list."
+    startup: "One more process and one YAML file."
+  skills:
+    - {name: Allow-list, does: "Filters forbidden tools out of tools/list."}
+    - {name: Federate, does: "Merges several MCP servers into one."}
+    - {name: Observe, does: "Logs and traces every call."}
+  weakness: "One more process and more YAML. Windows: use WSL2 for now."
+  source: https://agentgateway.dev
+
+- id: switchy
+  name: Switchy
+  animal: capybara switch operator
+  project: Agent Router
+  category: GATEWAY
+  joined_aaif: "2026-09 (formerly Envoy AI Gateway)"
+  stats: {autonomy: 0, reach: 3, control: 4, startup: 2}
+  why:
+    autonomy: "It routes traffic; it does not decide the task."
+    reach: "One OpenAI-compatible endpoint for many model providers and MCP tools."
+    control: "Routing, failover and token quotas set by a platform team."
+    startup: "aigw run on Linux or macOS; Kubernetes for production."
+  skills:
+    - {name: Divert, does: "Routes a request to a model by rule."}
+    - {name: Plan B, does: "Fails over to another provider."}
+    - {name: Budget, does: "Applies token quotas per team."}
+  weakness: "Overlaps with Bulwark in this story. aigw run is Linux and macOS only."
+  source: https://aaif.io/blog/agent-router-joins-aaif
+
+- id: glyphstone
+  name: Glyphstone
+  animal: stone tablet with many scripts
+  project: Open Responses
+  category: API SPECIFICATION
+  joined_aaif: "2026-10-22"
+  stats: {autonomy: 0, reach: 1, control: 1, startup: 1}
+  why:
+    autonomy: "A specification is a shared language, not a program."
+    reach: "Lets one client talk to many model providers the same way."
+    control: "Defines the shape of requests and output items."
+    startup: "Any server that speaks /v1/responses."
+  skills:
+    - {name: Common tongue, does: "POST /v1/responses works across providers."}
+    - {name: Items, does: "Output is a list of typed items: message, function_call."}
+    - {name: Conformance, does: "A test suite checks that providers agree."}
+  weakness: "Not a server. Local servers often support only a stateless subset."
+  source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
+
+- id: glasshell
+  name: Glasshell
+  animal: glass-shelled turtle
+  project: OpenSandbox
+  category: SANDBOX
+  joined_aaif: "2026-10-22"
+  stats: {autonomy: 0, reach: 2, control: 4, startup: 3}
+  why:
+    autonomy: "It runs what it is told, inside a box."
+    reach: "Files, commands and network inside an isolated container."
+    control: "Whatever runs inside cannot touch your laptop."
+    startup: "Needs Docker and the sandbox server."
+  skills:
+    - {name: Bubble, does: "Creates an isolated container."}
+    - {name: Run, does: "Executes pytest inside it."}
+    - {name: Discard, does: "Destroys the sandbox afterwards."}
+  weakness: "Needs Docker. Cold starts are slow."
+  source: https://github.com/opensandbox-group/OpenSandbox
+
+- id: dojolotl
+  name: Dojolotl
+  animal: axolotl in a dojo
+  project: OpenEnv
+  category: TRAINING ENVIRONMENT
+  joined_aaif: "2026-10-22"
+  stats: {autonomy: 0, reach: 1, control: 2, startup: 3}
+  why:
+    autonomy: "An environment is where an agent practises, not the agent."
+    reach: "Standard reset/step interface for many environments."
+    control: "The environment decides the reward."
+    startup: "Container images per environment."
+  skills:
+    - {name: reset(), does: "Starts a fresh episode."}
+    - {name: step(), does: "Applies one action and returns an observation."}
+    - {name: Reward, does: "Tests passed = reward 1.0."}
+  weakness: "Not for using an assistant today; it is for training better ones. API still changing."
+  source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox

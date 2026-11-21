@@ -1,0 +1,21 @@
+# goose recipe: fix one farolito issue. The game runs goose with an equivalent
+# one-shot prompt (see GOOSE_PROMPT in bestiary/encounters.py). Use this recipe to
+# rehearse by hand from the working copy:
+#   cd .bestiary/work/farolito
+#   GOOSE_PROVIDER=ollama GOOSE_MODEL=qwen3.5:9b goose run --recipe ../../../goose/fix-issue.yaml
+version: "1.0.0"
+title: "Fix farolito issue 7"
+description: "Make a missing config file produce a friendly error instead of a traceback."
+instructions: |
+  You are working in the farolito repository (current directory).
+  Follow AGENTS.md. Change only farolito/cli.py. Do not run git commands.
+prompt: |
+  Fix issue #7: running farolito with a missing config file prints a Python traceback.
+  Expected: a one-line error on stderr starting with "farolito: " that contains
+  "config file not found", and exit code 2. Then run python -m pytest -q. Say DONE when finished.
+extensions:
+  - type: builtin
+    name: developer
+    timeout: 300
+settings:
+  temperature: 0

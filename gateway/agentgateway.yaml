@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# agentgateway in front of the forge MCP server (encounters 3 and 8).
+# Start the game services first (uv run bestiary services), then:
+#   agentgateway -f gateway/agentgateway.yaml
+# The game expects the gateway at http://localhost:3000/mcp (BESTIARY_GATEWAY_URL).
+#
+# mcpAuthorization is an allow-list. Tools that no rule allows are filtered out of
+# tools/list and calls to them are rejected. delete_branch is not listed on purpose.
+mcp:
+  port: 3000
+  policies:
+    mcpAuthorization:
+      rules:
+      - 'mcp.tool.name == "list_issues"'
+      - 'mcp.tool.name == "read_issue"'
+      - 'mcp.tool.name == "read_file"'
+      - 'mcp.tool.name == "create_branch"'
+      - 'mcp.tool.name == "create_pull_request"'
+  targets:
+  - name: forge
+    mcp:
+      host: http://localhost:8765/mcp

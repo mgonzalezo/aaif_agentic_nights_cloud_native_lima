@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-mcp
+  labels: {app: forge-mcp}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: forge-mcp}}
+  template:
+    metadata:
+      labels: {app: forge-mcp}
+    spec:
+      containers:
+      - name: forge-mcp
+        image: bestiary-services:dev
+        imagePullPolicy: IfNotPresent
+        command: ["python", "-m", "bestiary.services.forge_mcp", "--host", "0.0.0.0", "--port", "8765"]
+        ports: [{containerPort: 8765}]
+        readinessProbe:
+          tcpSocket: {port: 8765}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-mcp
+spec:
+  selector: {app: forge-mcp}
+  ports: [{port: 8765, targetPort: 8765}]
