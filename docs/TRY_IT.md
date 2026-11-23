@@ -11,7 +11,7 @@ for real unless it says "not tested".
 | What | Value |
 |---|---|
 | Stack, region | `bestiary-demo`, `us-east-1` (AWS profile `cloud_native_lima`) |
-| Instance | `i-0123456789abcdef0`, c7i.8xlarge (32 vCPU, 64 GiB, **no GPU**), Ubuntu 24.04, k3s v1.37.2 |
+| Instance | c7i.8xlarge (32 vCPU, 64 GiB, **no GPU**), Ubuntu 24.04, k3s v1.37.2. **Deleted on 2026-11-23 at the end of the day: redeploy it (section 2).** The GitHub token parameter `/bestiary/github-token` was kept |
 | Models | `qwen3.5:35b` (main, thinking off) and `qwen3.5:4b` (failover) |
 | Code on the host | branch `feat/aws-gpu-demo` |
 
@@ -24,26 +24,38 @@ for real unless it says "not tested".
 3. A terminal at least **110 columns** wide (Windows Terminal is fine), font 16 pt or more.
 4. This repo, on branch `feat/aws-gpu-demo`: `git checkout feat/aws-gpu-demo`.
 
-## 2. Wake the host up
+## 2. Redeploy the host (about 20 minutes, about 0.5 USD to get ready)
 
-The host stops by itself (auto-stop) and is `stopped` when you come back. Start it:
-
-```powershell
-aws ec2 start-instances --instance-ids i-0123456789abcdef0 --region us-east-1 --profile cloud_native_lima
-aws ec2 wait instance-running --instance-ids i-0123456789abcdef0 --region us-east-1 --profile cloud_native_lima
-```
-
-Tested: after a stop and start, k3s and every pod came back **on their own in about one minute**, and
-the 6-hour auto-stop timer was re-armed. The public IP changes; nothing depends on it (SSM only).
-
-Check from the laptop that everything is Ready (needs the plugin):
+The host was deleted (`teardown`) after the first day of testing, so tomorrow starts with a deploy.
+The GitHub token parameter is still in AWS, so you do not need to create it again.
 
 ```powershell
 cd C:\Users\xmarc\Documents\Japan\Talks\AAFIF_Nights\aaif_agentic_nights_cloud_native_lima
-powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -InstanceId i-0123456789abcdef0 -Doctor
+git checkout feat/aws-gpu-demo
+powershell -ExecutionPolicy Bypass -File .\infra\aws\deploy.ps1 -InstanceType c7i.8xlarge -AutoStopHours 6 -RepoRef feat/aws-gpu-demo -SkipBudget
 ```
 
-Every row of `bestiary doctor` should say `ok`.
+It shows the cost estimate and asks you to type a confirmation. Add `-Yes` to skip the question, or
+`-BudgetEmail <address>` instead of `-SkipBudget` if you want the alerts.
+
+What happens by itself afterwards: the instance boots, clones the repo (with the stored token), builds the
+four images, installs k3s, OpenSandbox and every workload, and downloads the two models. In the first day's
+test this took about 20 minutes. **This will be the first deploy that runs the whole path from the user data
+with no manual fixes** (on day one the bootstrap was fixed and re-run by hand several times), so watch it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -Logs    # needs the Session Manager plugin
+```
+
+It is finished when the log says `READY` and shows `bestiary doctor` with every row `ok`. If it stops with
+`FAILED`, send me the last 30 lines of `/var/log/bestiary-bootstrap.log` (or ask me to read it with
+`aws ssm send-command`).
+
+Then check from the laptop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -Doctor
+```
 
 ## 3. Warm up the models (important after every start)
 
@@ -52,7 +64,7 @@ A restart unloads the models from memory. The first request loads them from disk
 Warm both before you play, otherwise the first live step looks slow:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -InstanceId i-0123456789abcdef0 -Shell
+powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -Shell
 ```
 then, inside the console pod:
 ```bash
@@ -67,7 +79,7 @@ When warm, each answers in 1 to 2 seconds.
 ## 4. Play
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -InstanceId i-0123456789abcdef0
+powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1
 ```
 
 Before each step: **Enter** = run live, **r** = show the replay, **s** = skip. Each creature card
@@ -137,7 +149,7 @@ Needs a demo repo and a token that can write to it.
 | Command | Effect |
 |---|---|
 | (nothing) | Auto-stop powers the host off 6 hours after boot. Disk still bills (about 0.02 USD/h) |
-| `aws ec2 stop-instances --instance-ids i-0123456789abcdef0 --region us-east-1 --profile cloud_native_lima` | Stop now |
+| `aws ec2 stop-instances --instance-ids <id from the deploy output> --region us-east-1 --profile cloud_native_lima` | Stop now (the stack and disk stay, so you can start it again) |
 | `powershell infra\aws\teardown.ps1 -DeleteTokenParameter` | Delete everything and audit that nothing billable is left. Then revoke the GitHub token on GitHub |
 
 ## 9. GPU: does it make sense?
