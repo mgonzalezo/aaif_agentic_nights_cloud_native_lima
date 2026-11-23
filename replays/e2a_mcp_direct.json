@@ -1,8 +1,8 @@
 {
   "encounter": "e2a_mcp_direct",
-  "recorded_at": "2026-11-23 13:09 UTC",
+  "recorded_at": "2026-11-23 23:43 UTC",
   "model": "ollama:qwen3.5:35b",
-  "seconds": 0.9,
+  "seconds": 1.0,
   "events": [
     {
       "kind": "MCP tools/list",

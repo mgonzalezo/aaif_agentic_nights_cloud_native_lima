@@ -1,8 +1,8 @@
 {
   "encounter": "e6_sandbox",
-  "recorded_at": "2026-11-23 13:10 UTC",
+  "recorded_at": "2026-11-23 23:44 UTC",
   "model": "ollama:qwen3.5:35b",
-  "seconds": 1.9,
+  "seconds": 2.1,
   "events": [
     {
       "kind": "sandbox",
@@ -14,7 +14,7 @@
     },
     {
       "kind": "pytest inside OpenSandbox",
-      "data": ".F                                                                       [100%]\n=================================== FAILURES ===================================\n_______________________ test_missing_config_is_friendly ________________________\n\npath = '/tmp/pytest-of-root/pytest-0/test_missing_config_is_friendl0/nope.toml'\n\n    def load_config(path: str) -> dict:\n        try:\n>           with open(path, \"rb\") as fh:\nE           FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-0/test_missing_config_is_friendl0/nope.toml'\n\nfarolito/cli.py:10: FileNotFoundError\n\nDuring handling of the above exception, another exception occurred:\n\ntmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_missing_config_is_friendl0')\ncapsys = <_pytest.capture.CaptureFixture object at 0x70f83486be90>\n\n    def test_missing_config_is_friendly(tmp_path, capsys):\n        missing = tmp_path / \"nope.toml\"\n>       assert main([\"--config\", str(missing)]) == 2\n\ntests/test_cli.py:13: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nfarolito/cli.py:22: in main\n    config = load_config(args.config)\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\npath = '/tmp/pytest-of-root/pytest-0/test_missing_config_is_friendl0/nope.toml'\n\n    def load_config(path: str) -> dict:\n        try:\n            with open(path, \"rb\") as fh:\n                return tomllib.load(fh)\n        except FileNotFoundError:\n            print(f\"farolito: config file not found: {path}\", file=sys.stderr)\n>           sys.exit(2)\nE           SystemExit: 2\n\nfarolito/cli.py:14: SystemExit\n----------------------------- Captured stderr call -----------------------------\nfarolito: config file not found: /tmp/pytest-of-root/pytest-0/test_missing_config_is_friendl0/nope.toml\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::test_missing_config_is_friendly - SystemExit: 2\n1 failed, 1 passed in 0.02s\n"
+      "data": "..                                                                       [100%]\n2 passed in 0.02s\n"
     }
   ]
 }

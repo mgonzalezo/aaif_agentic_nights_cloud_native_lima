@@ -1,12 +1,12 @@
 {
   "encounter": "ek_kubernetes",
-  "recorded_at": "2026-11-23 13:10 UTC",
+  "recorded_at": "2026-11-23 23:45 UTC",
   "model": "ollama:qwen3.5:35b",
   "seconds": 0.1,
   "events": [
     {
       "kind": "kubectl get pods -n bestiary -o wide",
-      "data": "NAME                                READY   STATUS      RESTARTS   AGE     IP           NODE               NOMINATED NODE   READINESS GATES\nagent-router-78d5c6968d-v25hf       1/1     Running     0          4m28s   10.42.0.28   ip-172-31-37-135   <none>           <none>\nconsole-7cddd58ff6-pwvjp            3/3     Running     0          3m58s   10.42.0.30   ip-172-31-37-135   <none>           <none>\nollama-57c66976d9-cgbn9             1/1     Running     0          54m     10.42.0.17   ip-172-31-37-135   <none>           <none>\nollama-pull-zjwvb                   0/1     Completed   0          4m28s   10.42.0.27   ip-172-31-37-135   <none>           <none>\nopenenv-farolito-54bd67c88f-4rq46   1/1     Running     0          54m     10.42.0.12   ip-172-31-37-135   <none>           <none>\nreviewer-a2a-6557d99455-bzsvx       1/1     Running     0          4m28s   10.42.0.29   ip-172-31-37-135   <none>           <none>\n"
+      "data": "NAME                                READY   STATUS      RESTARTS   AGE     IP           NODE               NOMINATED NODE   READINESS GATES\nagent-router-8584c44b59-c87dr       1/1     Running     0          6m14s   10.42.0.29   ip-172-31-38-202   <none>           <none>\nconsole-564b8454bf-7sxd9            3/3     Running     0          5m44s   10.42.0.30   ip-172-31-38-202   <none>           <none>\nollama-57c66976d9-v8p7z             1/1     Running     0          96m     10.42.0.16   ip-172-31-38-202   <none>           <none>\nollama-pull-sjhzw                   0/1     Completed   0          6m14s   10.42.0.27   ip-172-31-38-202   <none>           <none>\nopenenv-farolito-54bd67c88f-bnlqf   1/1     Running     0          96m     10.42.0.9    ip-172-31-38-202   <none>           <none>\nreviewer-a2a-69f5844db4-5lclb       1/1     Running     0          6m14s   10.42.0.28   ip-172-31-38-202   <none>           <none>\n"
     },
     {
       "kind": "tools/list through the agentgateway sidecar of this pod",

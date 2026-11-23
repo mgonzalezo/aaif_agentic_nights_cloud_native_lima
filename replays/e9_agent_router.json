@@ -1,8 +1,8 @@
 {
   "encounter": "e9_agent_router",
-  "recorded_at": "2026-11-23 13:10 UTC",
+  "recorded_at": "2026-11-23 23:45 UTC",
   "model": "ollama:qwen3.5:35b",
-  "seconds": 15.0,
+  "seconds": 15.1,
   "events": [
     {
       "kind": "Step 1: request through Agent Router, main model",
@@ -15,7 +15,7 @@
       "kind": "Response",
       "data": {
         "http_status": 200,
-        "seconds": 0.9,
+        "seconds": 1.0,
         "asked_for": "qwen3.5:35b",
         "served_by_model": "qwen3.5:35b",
         "answer": "I am Qwen3.5, the latest large language model developed by Tongyi Lab."
@@ -28,13 +28,13 @@
           "backend": "bestiary/ollama-main",
           "asked_for": "qwen3.5:35b",
           "answered_by": "qwen3.5:35b",
-          "requests": 2
+          "requests": 3
         },
         {
           "backend": "bestiary/ollama-small",
           "asked_for": "qwen3.5:35b",
           "answered_by": "qwen3.5:4b",
-          "requests": 1
+          "requests": 2
         }
       ]
     },
@@ -61,13 +61,13 @@
           "backend": "bestiary/ollama-main",
           "asked_for": "qwen3.5:35b",
           "answered_by": "qwen3.5:35b",
-          "requests": 2
+          "requests": 3
         },
         {
           "backend": "bestiary/ollama-small",
           "asked_for": "qwen3.5:35b",
           "answered_by": "qwen3.5:4b",
-          "requests": 2
+          "requests": 3
         }
       ]
     }

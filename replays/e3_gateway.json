@@ -1,8 +1,8 @@
 {
   "encounter": "e3_gateway",
-  "recorded_at": "2026-11-23 13:09 UTC",
+  "recorded_at": "2026-11-23 23:43 UTC",
   "model": "ollama:qwen3.5:35b",
-  "seconds": 0.0,
+  "seconds": 0.1,
   "events": [
     {
       "kind": "tools/list WITHOUT the gateway",
