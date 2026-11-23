@@ -296,12 +296,19 @@ def e5_bug(ctx: Ctx) -> None:
         if not diff:
             raise Fallback("goose finished but changed nothing (a silent failure: the model never called a tool)")
         ctx.wire("Diff written by goose", diff)
+        # LIVE only if the change really fixes the bug: the same check the reliability gate uses.
+        check = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=WORK_DIR,
+                               capture_output=True, text=True, timeout=60)
+        tail = (check.stdout.strip().splitlines() or check.stderr.strip().splitlines() or ["(no output)"])[-1]
+        ctx.wire("pytest on goose's change", {"passed": check.returncode == 0, "summary": tail})
+        if check.returncode != 0:
+            raise Fallback(f"goose changed the code but the tests still fail ({tail})")
 
     status = ctx.attempt("e5_goose", live)
     if status != "LIVE" or not workspace.unified_diff():
         workspace.apply_reference_fix()
-        ctx.say("For the story to continue, the recorded fix was applied to the working copy.", "yellow")
-        ctx.wire("Diff (from the recorded run)", workspace.unified_diff())
+        ctx.say("For the story to continue, the known-good fix (upstream/reference_fix) was applied to the working copy.", "yellow")
+        ctx.wire("Diff (known-good fix)", workspace.unified_diff())
     ctx.say("Myth 1 closed: MCP is not an agent. Only Chambero took a turn.", "bold yellow")
     ctx.pause()
 

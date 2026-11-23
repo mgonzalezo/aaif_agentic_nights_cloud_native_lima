@@ -329,3 +329,62 @@ def test_router_metrics_show_which_backend_served_which_model():
         {"backend": "bestiary/ollama-main", "asked_for": "qwen3.5:35b", "answered_by": "qwen3.5:35b", "requests": 1},
         {"backend": "bestiary/ollama-small", "asked_for": "qwen3.5:35b", "answered_by": "qwen3.5:4b", "requests": 2},
     ]
+
+
+def _goose_ctx(buf, monkeypatch, new_cli_text):
+    """Encounter 5 with goose stubbed: it 'edits' farolito/cli.py to new_cli_text."""
+    import json as _json
+    import shutil as _shutil
+
+    from bestiary import encounters
+    from bestiary.config import WORK_DIR
+    from bestiary.llm import Provider
+
+    monkeypatch.setattr(encounters.shutil, "which", lambda name: "/usr/bin/goose" if name == "goose" else _shutil.which(name))
+    issue = {"number": 7, "title": "Traceback when the config file is missing", "body": "Expected a one-line error and exit 2."}
+
+    async def fake_call(url, name, args):
+        return False, _json.dumps(issue)
+
+    def fake_stream(cmd, cwd, env, timeout, ctx):
+        (WORK_DIR / "farolito" / "cli.py").write_text(new_cli_text, encoding="utf-8")
+        return 0, ["goose | done"]
+
+    monkeypatch.setattr(encounters, "_mcp_call", fake_call)
+    monkeypatch.setattr(encounters, "_stream", fake_stream)
+    ctx = _auto_ctx(buf, monkeypatch)
+    ctx.detection = Detection(Provider("ollama", "http://x/v1", "m"), [])
+    return ctx
+
+
+def test_encounter_5_is_not_live_when_goose_breaks_the_tests(monkeypatch, fresh_workspace):
+    import subprocess as sp
+    import sys as _sys
+
+    from bestiary import encounters
+    from bestiary.config import UPSTREAM_TEMPLATE, WORK_DIR
+
+    original = (UPSTREAM_TEMPLATE / "farolito" / "cli.py").read_text(encoding="utf-8")
+    plausible_but_wrong = original.replace(
+        '    with open(path, "rb") as fh:\n        return tomllib.load(fh)\n',
+        '    try:\n        with open(path, "rb") as fh:\n            return tomllib.load(fh)\n'
+        '    except FileNotFoundError:\n        print(f"farolito: config file not found: {path}", file=sys.stderr)\n        sys.exit(2)\n',
+    )
+    assert plausible_but_wrong != original
+    buf = io.StringIO()
+    encounters.e5_bug(_goose_ctx(buf, monkeypatch, plausible_but_wrong))
+    out = buf.getvalue()
+    assert "tests still fail" in out and "known-good fix" in out
+    after = sp.run([_sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=WORK_DIR, capture_output=True, text=True)
+    assert after.returncode == 0  # the story continues with a fix that works
+
+
+def test_encounter_5_is_live_when_goose_really_fixes_it(monkeypatch, fresh_workspace):
+    from bestiary import encounters
+    from bestiary.config import REFERENCE_FIX
+
+    buf = io.StringIO()
+    encounters.e5_bug(_goose_ctx(buf, monkeypatch, REFERENCE_FIX.read_text(encoding="utf-8")))
+    out = buf.getvalue()
+    assert "tests still fail" not in out and "known-good fix" not in out
+    assert "LIVE" in out and "pytest on goose's change" in out
