@@ -259,3 +259,12 @@ def test_encounter_9_is_not_live_on_a_laptop(monkeypatch):
     buf = io.StringIO()
     encounters.e9_detour(_auto_ctx(buf, monkeypatch))
     assert "DIDACTIC" in buf.getvalue()
+
+
+def test_the_model_pod_says_whether_it_runs_on_gpu_or_cpu(monkeypatch):
+    monkeypatch.setenv("BESTIARY_PROFILE", "cloud")
+    monkeypatch.delenv("BESTIARY_ACCELERATOR", raising=False)
+    where = Where(settings=Settings(), kubectl=_fake_kubectl([]))
+    assert where.describe("glyphstone").endswith("(GPU)")
+    monkeypatch.setenv("BESTIARY_ACCELERATOR", "cpu")
+    assert Where(settings=Settings(), kubectl=_fake_kubectl([])).describe("glyphstone").endswith("(CPU)")

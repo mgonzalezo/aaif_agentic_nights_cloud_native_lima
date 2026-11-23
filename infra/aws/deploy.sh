@@ -21,12 +21,13 @@ SKIP_BUDGET=false
 YES=false
 DRY=false
 EXPECTED_ACCOUNT=000000000000
-QUOTA_CODE=L-DB2E81BA
+QUOTA_CODE=L-DB2E81BA   # set per instance type below (GPU: G/VT, CPU: Standard)
+QUOTA_NAME=G/VT
 
 usage() {
   cat <<EOF
 Usage: $0 --budget-email you@example.com [options]
-  --region R (us-east-1|us-east-2)   --profile P   --instance-type T (g6e.2xlarge|g6e.xlarge|g5.2xlarge|g6.2xlarge)
+  --region R (us-east-1|us-east-2)   --profile P   --instance-type T (g6e.2xlarge|g6e.xlarge|g5.2xlarge|g6.2xlarge|c7i.8xlarge|m7i.4xlarge|c7a.8xlarge|m7a.4xlarge)
   --model-tag T   --failover-model-tag T   --demo-repo OWNER/NAME   --demo-issue N   --auto-stop-hours N (1-72)   --stack-name N   --repo-ref R
   --repo-url U   --token-param NAME   --skip-budget   --yes (no typed confirmation)   --dry-run
 EOF
@@ -61,8 +62,8 @@ TEMPLATE_ARG="$TEMPLATE"
 command -v cygpath >/dev/null 2>&1 && TEMPLATE_ARG="$(cygpath -m "$TEMPLATE")"
 WOULD_STOP=false
 
-declare -A VCPU=( [g6e.xlarge]=4 [g6e.2xlarge]=8 [g5.2xlarge]=8 [g6.2xlarge]=8 )
-declare -A PRICE=( [g6e.2xlarge]=2.242 [g6e.xlarge]=1.861 [g5.2xlarge]=1.212 [g6.2xlarge]=0.978 )  # us-east-1 USD/h, hard-coded
+declare -A VCPU=( [g6e.xlarge]=4 [g6e.2xlarge]=8 [g5.2xlarge]=8 [g6.2xlarge]=8 [c7i.8xlarge]=32 [m7i.4xlarge]=16 [c7a.8xlarge]=32 [m7a.4xlarge]=16 )
+declare -A PRICE=( [g6e.2xlarge]=2.242 [g6e.xlarge]=1.861 [g5.2xlarge]=1.212 [g6.2xlarge]=0.978 [c7i.8xlarge]=1.428 [m7i.4xlarge]=0.806 [c7a.8xlarge]=1.642 [m7a.4xlarge]=0.927 )  # us-east-1 USD/h, hard-coded
 EXTRA=0.05
 
 say() { printf '%s\n' "$*"; }
@@ -77,6 +78,7 @@ say "=== Bestiary DEMO host: deploy (demo only - delete it after the talk) ==="
 $DRY && say "dry-run: read-only checks only, NO write calls to AWS."
 command -v aws >/dev/null || { say "aws CLI not found on PATH."; exit 1; }
 [ -n "${VCPU[$INSTANCE_TYPE]:-}" ] || { say "Unsupported instance type $INSTANCE_TYPE"; exit 2; }
+case "$INSTANCE_TYPE" in g*) ;; *) QUOTA_CODE=L-1216C47A; QUOTA_NAME=Standard ;; esac
 case "$REGION" in us-east-1|us-east-2) ;; *) stop_here "Region must be us-east-1 or us-east-2 (got $REGION)." ;; esac
 case "$AUTOSTOP" in ''|*[!0-9]*) stop_here "auto-stop-hours must be 1-72." ;; *) { [ "$AUTOSTOP" -ge 1 ] && [ "$AUTOSTOP" -le 72 ]; } || stop_here "auto-stop-hours must be 1-72." ;; esac
 if [ -z "$BUDGET_EMAIL" ] && ! $SKIP_BUDGET; then stop_here "Pass --budget-email you@example.com (AWS Budgets alerts), or --skip-budget."; fi
@@ -103,7 +105,7 @@ fi
 # 3. G/VT quota
 NEED="${VCPU[$INSTANCE_TYPE]}"
 if QUOTA="$(awsx service-quotas get-service-quota --service-code ec2 --quota-code "$QUOTA_CODE" --query Quota.Value --output text 2>/dev/null)"; then
-  say "G/VT on-demand vCPU quota ($QUOTA_CODE) in $REGION: $QUOTA ; $INSTANCE_TYPE needs $NEED."
+  say "$QUOTA_NAME on-demand vCPU quota ($QUOTA_CODE) in $REGION: $QUOTA ; $INSTANCE_TYPE needs $NEED."
   if awk -v q="$QUOTA" -v n="$NEED" 'BEGIN{exit !(q+0 < n+0)}'; then
     say "Quota request history (Status Desired Id):"
     awsx service-quotas list-requested-service-quota-change-history-by-quota --service-code ec2 --quota-code "$QUOTA_CODE" \

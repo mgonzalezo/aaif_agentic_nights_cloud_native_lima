@@ -5,7 +5,7 @@ You can redeploy it from this page. It is for a **demo**: there is no public acc
 delete it when you are done.
 
 > **WARNING: THIS COSTS MONEY UNTIL YOU TEAR IT DOWN.**
-> A g6e.2xlarge is about **2.24 USD per hour** (about 54 USD per day), plus about 0.05 USD per hour
+> A g6e.2xlarge is about **2.24 USD per hour** (a CPU instance such as c7i.8xlarge, 1.43) (about 54 USD per day), plus about 0.05 USD per hour
 > for the disk and the public IPv4 address. Auto-stop only *stops* the instance; the disk keeps
 > billing. When you finish, run **teardown** (see the end) and check that it prints `PASS`.
 
@@ -42,6 +42,30 @@ aws service-quotas request-service-quota-increase --service-code ec2 \
 Add about 2 USD per 72 h for the 200 GB gp3 disk and the IPv4 address. The stack also creates an
 AWS Budget that e-mails you at 50, 80 and 100 percent. Budgets lag by hours and **never stop
 anything**.
+
+### No GPU quota? Use a CPU instance
+
+The GPU quota starts at 0 and approval can take days. The **Standard** on-demand vCPU quota
+(`L-1216C47A`) is usually available at once, so the same stack also runs on a CPU instance:
+
+```powershell
+powershell infraws\deploy.ps1 -BudgetEmail you@example.com -InstanceType c7i.8xlarge
+```
+
+| CPU instance | vCPU / RAM | USD/hour | 72 h |
+|---|---|---|---|
+| **c7i.8xlarge** | 32 / 64 GiB | 1.428 | 103 |
+| c7a.8xlarge | 32 / 64 GiB (AMD) | 1.642 | 118 |
+| m7i.4xlarge | 16 / 64 GiB | 0.806 | 58 |
+| m7a.4xlarge | 16 / 64 GiB (AMD) | 0.927 | 67 |
+
+It uses plain Ubuntu 24.04 (no GPU driver), skips the NVIDIA steps, and applies
+`k8s/overlays/ec2-cpu`: the same pods, with Ollama on the CPU. Bootstrap detects the accelerator
+by itself (`nvidia-smi`), and the cards say `(CPU)` or `(GPU)`. **Expect slower, and measure:**
+decode speed on a CPU is limited by memory bandwidth, so a mixture-of-experts model such as
+`qwen3.5:35b` (about 3B active parameters) is the first candidate, then `9b`, then `4b`. Run
+`bestiary gate` and keep only what passes; a step that does not pass is shown as REPLAY. Only
+x86 types are offered: some images used here are not confirmed for arm64.
 
 ## 2. Architecture
 

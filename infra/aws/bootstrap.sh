@@ -11,6 +11,7 @@
 #   AWS_REGION                region of that parameter             (default: instance region)
 #   BESTIARY_GITHUB_REPO      demo repo for the real PR            (default mgonzalezo/farolito-demo)
 #   BESTIARY_GITHUB_ISSUE     issue number of the bug in that repo (default: unset = local forge)
+#   BESTIARY_ACCELERATOR      gpu | cpu                            (default: gpu if nvidia-smi sees a GPU, else cpu)
 #   REPO_DIR                  checkout of this repo                (default /opt/bestiary)
 #   REPO_URL, REPO_REF        used only if REPO_DIR does not exist
 #
@@ -38,6 +39,10 @@ BESTIARY_GITHUB_REPO="${BESTIARY_GITHUB_REPO:-mgonzalezo/farolito-demo}"
 BESTIARY_GITHUB_ISSUE="${BESTIARY_GITHUB_ISSUE:-}"
 REPO_DIR="${REPO_DIR:-/opt/bestiary}"
 NS=bestiary
+if [[ -z "${BESTIARY_ACCELERATOR:-}" ]]; then
+  if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then BESTIARY_ACCELERATOR=gpu; else BESTIARY_ACCELERATOR=cpu; fi
+fi
+OVERLAY=ec2; [[ "$BESTIARY_ACCELERATOR" == "cpu" ]] && OVERLAY=ec2-cpu
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export DEBIAN_FRONTEND=noninteractive
 
@@ -52,9 +57,13 @@ kc() { k3s kubectl "$@"; }
 [[ $EUID -eq 0 ]] || die "run as root (sudo)"
 
 # ---- 1. GPU ------------------------------------------------------------------------------
-log "1/12 GPU check"
-nvidia-smi -L || die "nvidia-smi failed: wrong AMI or instance type, or the driver is not loaded"
-nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+log "1/12 accelerator: $BESTIARY_ACCELERATOR (overlay k8s/overlays/$OVERLAY)"
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]]; then
+  nvidia-smi -L || die "nvidia-smi failed: wrong AMI or instance type, or the driver is not loaded"
+  nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+else
+  echo "CPU mode: no GPU, no NVIDIA toolkit, no device plugin. $(nproc) vCPU, $(free -g | awk '/Mem:/{print $2}') GiB RAM"
+fi
 
 # ---- 2. base packages + Docker + NVIDIA container toolkit ----------------------------------
 log "2/12 packages, Docker, NVIDIA container toolkit"
@@ -64,7 +73,7 @@ if ! command -v docker >/dev/null; then
   apt-get install -y -qq docker.io >/dev/null
 fi
 systemctl enable --now docker
-if ! command -v nvidia-container-runtime >/dev/null; then
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]] && ! command -v nvidia-container-runtime >/dev/null; then
   # Not on PATH: k3s only detects the runtime from PATH. Install the toolkit (NVIDIA docs, apt).
   log "installing nvidia-container-toolkit"
   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -73,8 +82,10 @@ if ! command -v nvidia-container-runtime >/dev/null; then
     > /etc/apt/sources.list.d/nvidia-container-toolkit.list
   apt-get update -qq && apt-get install -y -qq nvidia-container-toolkit >/dev/null
 fi
-command -v nvidia-container-runtime >/dev/null || die "nvidia-container-runtime still not on PATH"
-nvidia-container-runtime --version | head -1
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]]; then
+  command -v nvidia-container-runtime >/dev/null || die "nvidia-container-runtime still not on PATH"
+  nvidia-container-runtime --version | head -1
+fi
 
 # ---- 3. uv (host copy; the console image has its own) --------------------------------------
 log "3/12 uv"
@@ -89,13 +100,15 @@ if ! command -v k3s >/dev/null; then
 fi
 retry 60 5 kc get nodes >/dev/null 2>&1 || die "k3s API did not come up"
 # k3s detects the nvidia runtime at start, from PATH. If the toolkit was installed after k3s, restart once.
-if ! grep -q nvidia /var/lib/rancher/k3s/agent/etc/containerd/config.toml 2>/dev/null; then
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]] && ! grep -q nvidia /var/lib/rancher/k3s/agent/etc/containerd/config.toml 2>/dev/null; then
   log "k3s did not register the nvidia runtime: restarting k3s once"
   systemctl restart k3s
   retry 60 5 kc get nodes >/dev/null 2>&1 || die "k3s API did not come back"
 fi
-grep -q nvidia /var/lib/rancher/k3s/agent/etc/containerd/config.toml || die "k3s containerd config has no nvidia runtime"
-retry 30 5 kc get runtimeclass nvidia >/dev/null 2>&1 || die "RuntimeClass nvidia missing"
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]]; then
+  grep -q nvidia /var/lib/rancher/k3s/agent/etc/containerd/config.toml || die "k3s containerd config has no nvidia runtime"
+  retry 30 5 kc get runtimeclass nvidia >/dev/null 2>&1 || die "RuntimeClass nvidia missing"
+fi
 kc wait --for=condition=Ready node --all --timeout=180s
 echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' > /etc/profile.d/k3s.sh
 
@@ -112,6 +125,7 @@ helm version --short
 # ---- 6. NVIDIA device plugin ---------------------------------------------------------------------
 log "6/12 NVIDIA device plugin ${NVDP_VERSION}"
 NODE=$(kc get nodes -o jsonpath='{.items[0].metadata.name}')
+if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]]; then
 # The chart only schedules on nodes labelled by NFD/GFD; without them, label the node by hand.
 kc label node "$NODE" nvidia.com/gpu.present=true --overwrite
 helm repo add nvdp https://nvidia.github.io/k8s-device-plugin >/dev/null 2>&1 || true
@@ -122,6 +136,9 @@ helm upgrade -i nvdp nvdp/nvidia-device-plugin --version "$NVDP_VERSION" \
 gpu_allocatable() { [[ "$(kc get node "$NODE" -o jsonpath='{.status.allocatable.nvidia\.com/gpu}')" == "1" ]]; }
 retry 60 5 gpu_allocatable || { kc -n nvidia-device-plugin get pods; die "nvidia.com/gpu is not allocatable"; }
 echo "GPU allocatable on $NODE: nvidia.com/gpu=1"
+else
+  echo "CPU mode: skipped"
+fi
 
 # ---- 7. the repo -------------------------------------------------------------------------------------
 log "7/12 repository"
@@ -165,7 +182,7 @@ else
 fi
 cfg=(--from-literal=BESTIARY_MODEL="$BESTIARY_MODEL" --from-literal=BESTIARY_FAILOVER_MODEL="$BESTIARY_FAILOVER_MODEL"
      --from-literal=BESTIARY_EXTRA_BODY="$BESTIARY_EXTRA_BODY" --from-literal=BESTIARY_FORGE="$FORGE"
-     --from-literal=BESTIARY_GITHUB_REPO="$BESTIARY_GITHUB_REPO" --from-literal=BESTIARY_GITHUB_ISSUE="$BESTIARY_GITHUB_ISSUE")
+     --from-literal=BESTIARY_ACCELERATOR="$BESTIARY_ACCELERATOR" --from-literal=BESTIARY_GITHUB_REPO="$BESTIARY_GITHUB_REPO" --from-literal=BESTIARY_GITHUB_ISSUE="$BESTIARY_GITHUB_ISSUE")
 kc -n "$NS" create configmap bestiary-config "${cfg[@]}" --dry-run=client -o yaml | kc apply -f - >/dev/null
 echo "forge backend: $FORGE; main model: $BESTIARY_MODEL; failover model: $BESTIARY_FAILOVER_MODEL"
 # OpenSandbox API key: random, created once, copied to the namespaces that need it.
@@ -195,9 +212,9 @@ helm upgrade -i opensandbox-server "$OS_DIR/manifests/charts/server" -n opensand
   -f "$REPO_DIR/infra/aws/opensandbox-values.yaml" >/dev/null
 
 # ---- 11. the Bestiary workloads ---------------------------------------------------------------------------------
-log "11/12 kubectl apply -k k8s/overlays/ec2"
+log "11/12 kubectl apply -k k8s/overlays/$OVERLAY"
 kc -n "$NS" delete job ollama-pull --ignore-not-found >/dev/null   # Job specs are immutable
-kc apply -k k8s/overlays/ec2
+kc apply -k "k8s/overlays/$OVERLAY"
 # the ConfigMaps have fixed names (no hash suffix): restart what reads them so a re-run picks up changes
 kc -n "$NS" rollout restart deploy/console deploy/reviewer-a2a deploy/agent-router >/dev/null
 
@@ -211,7 +228,7 @@ echo "waiting for the model pull job (22 GB for the main model; up to 45 min)"
 kc -n "$NS" wait --for=condition=complete job/ollama-pull --timeout=2700s || { kc -n "$NS" logs job/ollama-pull --tail=30; die "model pull did not finish"; }
 echo "--- ollama list"
 kc -n "$NS" exec deploy/ollama -- ollama list
-echo "--- GPU allocation"
+echo "--- GPU allocation ($BESTIARY_ACCELERATOR mode)"
 kc -n "$NS" get pods -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,GPU:.spec.containers[*].resources.limits.nvidia\.com/gpu'
 echo "--- nodes and pods"
 kc get nodes -o wide

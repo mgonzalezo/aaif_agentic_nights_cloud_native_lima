@@ -56,6 +56,7 @@ class Settings:
     provider: str = field(default_factory=lambda: _env("BESTIARY_PROVIDER", "auto"))
     ollama_host: str = field(default_factory=lambda: _env("OLLAMA_HOST", _by_profile("http://localhost:11434", "http://ollama:11434")))
     ollama_model: str = field(default_factory=lambda: _env("BESTIARY_MODEL", "qwen3.5:9b"))
+    accelerator: str = field(default_factory=lambda: _env("BESTIARY_ACCELERATOR", "gpu").lower())  # where Ollama runs in the cloud profile: gpu | cpu
     failover_model: str = field(default_factory=lambda: _env("BESTIARY_FAILOVER_MODEL", "qwen3.5:4b"))
     openai_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     openai_model: str = field(default_factory=lambda: _env("OPENAI_MODEL", ""))

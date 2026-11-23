@@ -11,7 +11,7 @@
 param(
   [string]$Region = 'us-east-1',
   [string]$Profile = $(if ($env:AWS_PROFILE) { $env:AWS_PROFILE } else { 'cloud_native_lima' }),
-  [ValidateSet('g6e.2xlarge', 'g6e.xlarge', 'g5.2xlarge', 'g6.2xlarge')]
+  [ValidateSet('g6e.2xlarge', 'g6e.xlarge', 'g5.2xlarge', 'g6.2xlarge', 'c7i.8xlarge', 'm7i.4xlarge', 'c7a.8xlarge', 'm7a.4xlarge')]
   [string]$InstanceType = 'g6e.2xlarge',
   [string]$ModelTag = 'qwen3.5:35b',
   [string]$FailoverModelTag = 'qwen3.5:4b',
@@ -31,13 +31,16 @@ param(
 
 $ErrorActionPreference = 'Continue'
 $ExpectedAccount = '000000000000'
-$QuotaCode = 'L-DB2E81BA'
+$GpuTypes = @('g6e.2xlarge', 'g6e.xlarge', 'g5.2xlarge', 'g6.2xlarge')
+# GPU types are limited by 'Running On-Demand G and VT instances'; CPU types by the Standard (A, C, D, H, I, M, R, T, Z) quota.
+$QuotaCode = if ($GpuTypes -contains $InstanceType) { 'L-DB2E81BA' } else { 'L-1216C47A' }
+$QuotaName = if ($GpuTypes -contains $InstanceType) { 'G/VT' } else { 'Standard' }
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Template = Join-Path $Here 'demo-host.yaml'
 
 # vCPUs per type, and us-east-1 on-demand USD/hour (hard-coded estimate, not a live price).
-$VCpu = @{ 'g6e.xlarge' = 4; 'g6e.2xlarge' = 8; 'g5.2xlarge' = 8; 'g6.2xlarge' = 8 }
-$Price = @{ 'g6e.2xlarge' = 2.242; 'g6e.xlarge' = 1.861; 'g5.2xlarge' = 1.212; 'g6.2xlarge' = 0.978 }
+$VCpu = @{ 'g6e.xlarge' = 4; 'g6e.2xlarge' = 8; 'g5.2xlarge' = 8; 'g6.2xlarge' = 8; 'c7i.8xlarge' = 32; 'm7i.4xlarge' = 16; 'c7a.8xlarge' = 32; 'm7a.4xlarge' = 16 }
+$Price = @{ 'g6e.2xlarge' = 2.242; 'g6e.xlarge' = 1.861; 'g5.2xlarge' = 1.212; 'g6.2xlarge' = 0.978; 'c7i.8xlarge' = 1.428; 'm7i.4xlarge' = 0.806; 'c7a.8xlarge' = 1.642; 'm7a.4xlarge' = 0.927 }
 $ExtraPerHour = 0.05   # ~200 GB gp3 + public IPv4
 
 function Say([string]$m, [string]$c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -88,7 +91,7 @@ $qv = 0.0
 if ($script:AwsExit -ne 0 -or -not [double]::TryParse($quota, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$qv)) {
   Stop-Here "Could not read quota $QuotaCode (service-quotas:GetServiceQuota denied?)."
 } else {
-  Say "G/VT on-demand vCPU quota ($QuotaCode) in ${Region}: $qv ; $InstanceType needs $need."
+  Say "$QuotaName on-demand vCPU quota ($QuotaCode) in ${Region}: $qv ; $InstanceType needs $need."
   if ($qv -lt $need) {
     $hist = Invoke-AwsCli @('service-quotas', 'list-requested-service-quota-change-history-by-quota', '--service-code', 'ec2', '--quota-code', $QuotaCode, '--query', 'RequestedQuotas[].[Status,DesiredValue,Id]', '--output', 'text') -Quiet
     Say "Quota request history (Status Desired Id):`n$hist" 'Yellow'

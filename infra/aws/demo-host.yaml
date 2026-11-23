@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  DEMO ONLY - Agentic Bestiary single GPU host (EC2 + k3s). Throwaway stack:
+  DEMO ONLY - Agentic Bestiary single host (EC2 + k3s), GPU or CPU. Throwaway stack:
   no inbound ports, access via SSM Session Manager only. Auto-stops after
   AutoStopHours; delete the stack (infra/aws/teardown.ps1) right after the talk.
 
@@ -9,7 +9,7 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label: { default: Host }
-        Parameters: [InstanceType, AutoStopHours, RootVolumeGiB, AmiParameter, VpcId, SubnetId]
+        Parameters: [InstanceType, AutoStopHours, RootVolumeGiB, AmiParameter, CpuAmiParameter, VpcId, SubnetId]
       - Label: { default: Bootstrap }
         Parameters: [RepoUrl, RepoRef, ModelTag, FailoverModelTag, GitHubTokenParameterName, GitHubDemoRepo, GitHubDemoIssue]
       - Label: { default: Cost guard }
@@ -24,8 +24,10 @@ Parameters:
   InstanceType:
     Type: String
     Default: g6e.2xlarge
-    AllowedValues: [g6e.2xlarge, g6e.xlarge, g5.2xlarge, g6.2xlarge]
-    Description: GPU instance type (g6e = 1x L40S 48 GB). Needs G/VT on-demand vCPU quota (L-DB2E81BA).
+    AllowedValues: [g6e.2xlarge, g6e.xlarge, g5.2xlarge, g6.2xlarge, c7i.8xlarge, m7i.4xlarge, c7a.8xlarge, m7a.4xlarge]
+    Description: >-
+      GPU types (g6e = 1x L40S 48 GB) need G/VT on-demand vCPU quota (L-DB2E81BA) and use the Deep Learning GPU AMI.
+      CPU types (x86, 64 GiB) need Standard on-demand vCPU quota (L-1216C47A), use plain Ubuntu 24.04, and run the model on the CPU.
   AutoStopHours:
     Type: Number
     Default: 8
@@ -82,6 +84,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id
     Description: Public SSM parameter resolving to the Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04).
+  CpuAmiParameter:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Public SSM parameter resolving to the Canonical Ubuntu 24.04 amd64 AMI (used only for CPU instance types).
   RootVolumeGiB:
     Type: Number
     Default: 200
@@ -105,6 +111,11 @@ Parameters:
 
 Conditions:
   WantBudget: !Equals [!Ref CreateBudget, "true"]
+  IsGpu: !Or
+    - !Equals [!Ref InstanceType, g6e.2xlarge]
+    - !Equals [!Ref InstanceType, g6e.xlarge]
+    - !Equals [!Ref InstanceType, g5.2xlarge]
+    - !Equals [!Ref InstanceType, g6.2xlarge]
 
 Resources:
   HostSecurityGroup:
@@ -163,7 +174,7 @@ Resources:
   HostInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AmiParameter
+      ImageId: !If [IsGpu, !Ref AmiParameter, !Ref CpuAmiParameter]
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref HostInstanceProfile
       # OS-level shutdown (the auto-stop timer) STOPS the instance; it does not terminate it.
@@ -178,9 +189,8 @@ Resources:
       MetadataOptions:
         HttpEndpoint: enabled
         HttpTokens: required            # IMDSv2 only
-        # Hop limit 2: a container/pod behind the k3s CNI bridge is one extra hop from the host;
-        # with 1 the pod's IMDSv2 PUT response is dropped. Trade-off: pods can reach the instance
-        # role (which can read the GitHub token parameter). Acceptable for a throwaway demo.
+        # Hop limit 1: pods behind the k3s CNI bridge cannot reach IMDS, so they cannot use the
+        # instance role (which can read the GitHub token parameter). Bootstrap runs on the host.
         HttpPutResponseHopLimit: 1
       BlockDeviceMappings:
         - DeviceName: /dev/sda1          # root device name of the Ubuntu DLAMI

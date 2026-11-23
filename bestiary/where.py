@@ -25,7 +25,7 @@ PLACEMENT: dict[str, tuple[str, str]] = {
     "bulwark": ("here", "container agentgateway (sidecar, :3000)"),
     "scribbit": ("here", "file in the shared emptyDir (AGENTS.md)"),
     "satchel": ("here", "files in the shared emptyDir (.agents/skills)"),
-    "glyphstone": ("ollama", "Ollama /v1/responses (GPU)"),
+    "glyphstone": ("ollama", "Ollama /v1/responses"),
     "chasqui": ("reviewer-a2a", "reviewer agent (A2A)"),
     "switchy": ("agent-router", "Agent Router :1975"),
     "glasshell": ("static:namespace opensandbox", "a sandbox pod created per run by OpenSandbox"),
@@ -97,4 +97,6 @@ class Where:
             base = place.removeprefix("static:")
         else:
             base = self._pod_of(place)
+        if creature_id == "glyphstone":
+            detail += f" ({self.settings.accelerator.upper()})"
         return f"{base}: {detail}"

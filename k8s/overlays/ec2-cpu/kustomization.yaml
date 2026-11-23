@@ -1,0 +1,24 @@
+# EC2 + k3s with NO GPU (a CPU instance such as c7i.8xlarge). Same workloads as overlays/ec2;
+# only Ollama changes: no NVIDIA runtime class, no GPU request, CPU memory requests instead.
+# Applied by infra/aws/bootstrap.sh when the host has no GPU:  kubectl apply -k k8s/overlays/ec2-cpu
+#
+# The main model runs on the CPU, so pick one that passes `bestiary gate` there. A mixture of
+# experts such as qwen3.5:35b (about 3B active parameters) reads far fewer weights per token than
+# a dense 9B, which is why it is the first candidate. Measure before you trust it live.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../ec2
+patches:
+- target: {kind: Deployment, name: ollama}
+  patch: |-
+    - op: remove
+      path: /spec/template/spec/runtimeClassName
+    - op: replace
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests: {cpu: "4", memory: 32Gi}
+        limits: {memory: 48Gi}
+    - op: replace
+      path: /spec/template/spec/containers/0/env/4/value   # OLLAMA_CONTEXT_LENGTH: smaller on CPU (KV cache and prefill cost)
+      value: "16384"

@@ -96,3 +96,15 @@ def test_no_secret_material_in_the_repo():
         for path in (ROOT / base).rglob("*"):
             if path.is_file() and path.suffix in {".yaml", ".yml", ".sh", ".ps1", ".py", ".toml", ".md", ""}:
                 assert not pattern.search(path.read_text(encoding="utf-8", errors="ignore")), path
+
+
+def test_cpu_overlay_is_the_ec2_stack_without_any_gpu():
+    cpu, gpu = render("ec2-cpu"), render("ec2")
+    assert set(by_kind(cpu, "Deployment")) == set(by_kind(gpu, "Deployment"))
+    ollama = by_kind(cpu, "Deployment")["ollama"]["spec"]["template"]["spec"]
+    assert "runtimeClassName" not in ollama
+    for dep in by_kind(cpu, "Deployment").values():
+        for c in containers(dep).values():
+            assert "nvidia.com/gpu" not in c.get("resources", {}).get("limits", {})
+    env = {e["name"]: e["value"] for e in ollama["containers"][0]["env"]}
+    assert env["OLLAMA_KEEP_ALIVE"] == "-1" and env["OLLAMA_CONTEXT_LENGTH"] == "16384"

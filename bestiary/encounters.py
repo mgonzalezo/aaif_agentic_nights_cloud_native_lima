@@ -566,13 +566,14 @@ def ek_kubernetes(ctx: Ctx) -> None:
             hint = r.stderr.strip()[:200] if cloud else "no 'bestiary' namespace (run: uv run bestiary k8s up)"
             raise Fallback(hint)
         ctx.wire(f"kubectl get pods -n {ns} -o wide", r.stdout)
-        if cloud:
+        if cloud and ctx.settings.accelerator == "gpu":
             gpu = subprocess.run([kubectl, "get", "pods", "-n", ns, "-o", GPU_COLUMNS], capture_output=True, text=True, timeout=15)
             ctx.wire("GPUs requested per pod (nvidia.com/gpu)", gpu.stdout or gpu.stderr)
         via = "the agentgateway sidecar of this pod" if cloud else "agentgateway running in kind"
         ctx.wire(f"tools/list through {via}", _run(_mcp_list(k8s_url)))
         if cloud:
-            ctx.say("The model runs on the GPU in its own pod. The gateway filters tools next to the game.", "bold green")
+            where_model = "the GPU" if ctx.settings.accelerator == "gpu" else "the CPU"
+            ctx.say(f"The model runs on {where_model} in its own pod. The gateway filters tools next to the game.", "bold green")
         else:
             ctx.say("Same creatures, same YAML ideas, now as pods. Ollama still runs on the host.", "bold green")
 
