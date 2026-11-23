@@ -6,7 +6,7 @@
 # Environment (all optional except where noted):
 #   BESTIARY_MODEL            main model tag                       (default qwen3.5:35b)
 #   BESTIARY_FAILOVER_MODEL   small model for Agent Router failover (default qwen3.5:4b)
-#   BESTIARY_EXTRA_BODY       JSON merged into every /v1/responses request, e.g. {"think": false}
+#   BESTIARY_EXTRA_BODY       JSON merged into every /v1/responses request, (default {"think": false}; set it empty to leave thinking on)
 #   GITHUB_TOKEN_PARAM        SSM SecureString holding a GitHub token (default /bestiary/github-token)
 #   AWS_REGION                region of that parameter             (default: instance region)
 #   BESTIARY_GITHUB_REPO      demo repo for the real PR            (default mgonzalezo/farolito-demo)
@@ -33,7 +33,8 @@ SANDBOX_IMAGE="${SANDBOX_IMAGE:-bestiary-sandbox:1}"
 
 BESTIARY_MODEL="${BESTIARY_MODEL:-qwen3.5:35b}"
 BESTIARY_FAILOVER_MODEL="${BESTIARY_FAILOVER_MODEL:-qwen3.5:4b}"
-BESTIARY_EXTRA_BODY="${BESTIARY_EXTRA_BODY:-}"
+# think=false: verified live on qwen3.5:35b through /v1/responses (10 s -> 4.5 s per agent turn on a CPU host).
+[[ -v BESTIARY_EXTRA_BODY ]] || BESTIARY_EXTRA_BODY='{"think": false}'
 GITHUB_TOKEN_PARAM="${GITHUB_TOKEN_PARAM:-/bestiary/github-token}"
 BESTIARY_GITHUB_REPO="${BESTIARY_GITHUB_REPO:-mgonzalezo/farolito-demo}"
 BESTIARY_GITHUB_ISSUE="${BESTIARY_GITHUB_ISSUE:-}"
