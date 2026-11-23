@@ -51,6 +51,7 @@ uv run bestiary doctor
 | 1 | [agentgateway](https://agentgateway.dev) (Windows: use WSL2) | Encounters 3 and 8: tool filtering |
 | 2 | Docker and the OpenSandbox server | Encounter 6: tests in a sandbox |
 | 3 | kind and kubectl | The Kubernetes region |
+| Cloud | An AWS account with GPU quota | Everything as pods on one GPU instance, nothing on your laptop: [docs/AWS_DEPLOY.md](docs/AWS_DEPLOY.md) |
 
 Step-by-step instructions per OS: [docs/SETUP.md](docs/SETUP.md).
 
@@ -82,9 +83,9 @@ No model? Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env` (copy
 | 6 | The flaky test | Test safely | `pytest` inside OpenSandbox |
 | 7 | Second opinion | Review by another team | A2A Agent Card, task delegation, Open Responses items |
 | 8 | The PR | Open the pull request | `create_pull_request` through the gateway (local forge or real GitHub) |
-| 9 | Detour | Many models | Agent Router vs agentgateway (replay) |
-| 10 | The dojo | Improve the model later | Tests as a reward signal (explanation of OpenEnv) |
-| K8s | Kubernetes region | Share it with many teams | The same services as pods in kind |
+| 9 | Detour | Many models | Agent Router vs agentgateway. In the cloud profile: a request to the main model, then a simulated outage and the failover to a small model (LIVE). On a laptop: replay or DIDACTIC |
+| 10 | The dojo | Improve the model later | Tests as a reward signal. With an OpenEnv server (`envs/farolito_env`): `reset` and `step` over HTTP (LIVE). Otherwise DIDACTIC |
+| K8s | Kubernetes region | Share it with many teams | The same services as pods in kind, or (cloud profile) the pod the game itself runs in |
 
 ## Commands
 
@@ -98,7 +99,8 @@ uv run bestiary record          # run everything live and save replays/
 uv run bestiary sprites         # show the creatures
 uv run bestiary sprites --out assets/sprites   # PNGs for slides
 uv run bestiary github-setup <owner>/<repo>    # demo repo for a real PR
-uv run bestiary k8s up | down
+uv run bestiary k8s up | down       # kind cluster (laptop, no GPU)
+BESTIARY_PROFILE=cloud uv run bestiary   # in-cluster service URLs (used inside the console pod)
 uv run python minimal_agent.py "Read issue 7"
 uv run pytest -q
 ```
@@ -112,11 +114,13 @@ minimal_agent.py     a whole agent in about 100 lines (shown on screen)
 upstream/farolito/   the toy upstream project, with AGENTS.md and .agents/skills
 gateway/             agentgateway config (allow-list policy)
 goose/               goose recipe for rehearsing encounter 5 by hand
-k8s/                 kind cluster, Dockerfile and manifests
+k8s/                 Dockerfile and kustomize: base/ shared, overlays/kind (laptop), overlays/ec2 (GPU)
+envs/farolito_env/   OpenEnv environment for encounter 10
+infra/aws/           CloudFormation, deploy/teardown/present scripts, bootstrap.sh (GPU demo host)
 agent-router/        how to record the Agent Router replay
 docker/              sandbox image for OpenSandbox
 replays/             recorded real runs
-docs/                setup per OS, stage runbook
+docs/                setup per OS, AWS GPU deploy, stage runbook
 ```
 
 ## Licence

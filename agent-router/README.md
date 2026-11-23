@@ -1,26 +1,34 @@
 # Agent Router (encounter 9, side quest)
 
-Agent Router (formerly Envoy AI Gateway) gives apps one OpenAI-compatible endpoint
-for many model providers, with routing, failover and token quotas.
+Agent Router (formerly Envoy AI Gateway) gives apps one OpenAI-compatible endpoint for many
+model backends, with routing, failover and token quotas. Docs: https://theagentrouter.ai/docs/
 
-On stage it is shown from a recorded run. To record it (Linux or macOS only,
-because `aigw run` supports those two):
+## In the cloud profile (LIVE)
+
+`k8s/overlays/ec2/agent-router.yaml` runs it in standalone mode (`aigw run`, image
+`envoyproxy/ai-gateway-cli`, port 1975) with the config in `k8s/overlays/ec2/aigw-config.yaml`:
+
+- priority 0: Service `ollama-main` (the model the client asks for)
+- priority 1: Service `ollama-small` (`modelNameOverride` to the small model)
+- a retry policy that moves to priority 1 on a refused connection or a 5xx
+
+Both Services select the same Ollama pod (one GPU, one pod). The game simulates the outage by
+patching the selector of `ollama-main` (and restores it), then asks again: the answer comes from
+the small model. The router's JSON access log shows which backend served each request:
 
 ```bash
-# 1. Ollama running with the stage model
-ollama pull qwen3.5:9b
+kubectl -n bestiary logs deploy/agent-router --tail=5
+```
 
-# 2. Start Agent Router in standalone mode, pointing at Ollama
-OPENAI_BASE_URL=http://localhost:11434/v1 OPENAI_API_KEY=unused aigw run
-#    (it listens on http://localhost:1975)
+## On a laptop (REPLAY or DIDACTIC)
 
-# 3. In another terminal, record the replay
+`aigw run` supports Linux and macOS. To record a replay against a local Ollama:
+
+```bash
+OPENAI_BASE_URL=http://localhost:11434/v1 OPENAI_API_KEY=unused aigw run   # listens on :1975
 uv run python agent-router/record.py
 ```
 
-The recording is saved to `replays/e9_agent_router.json` and the game shows it
-with a REPLAY badge and the recording date.
-
-Check the current flags with `aigw run --help` before recording; the CLI moved
-from envoyproxy/ai-gateway to theagentrouter/agent-router in September 2026.
-Docs: https://theagentrouter.ai/docs/cli/aigwrun/
+The recording is saved to `replays/e9_agent_router.json` and shown with a REPLAY badge and the
+recording date. Without it, the encounter is DIDACTIC, and says so.
+Check `aigw run --help` first: the CLI moved from envoyproxy/ai-gateway to theagentrouter/agent-router in September 2026.

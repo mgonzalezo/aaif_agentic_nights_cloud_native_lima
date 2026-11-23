@@ -15,3 +15,12 @@ jobs:
       - run: uv sync --all-extras
       - run: uv run pytest -q
       - run: uv run bestiary doctor
+  openenv:
+    # OpenEnv pins mcp<2 while the game needs mcp 2.x, so its environment is tested in its own env.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: >
+          PYTHONPATH=envs uv run --no-project --python 3.12 --with openenv==0.14.0 --with pytest==8.3.4
+          --with httpx --with uvicorn --with starlette pytest -q tests/test_openenv_env.py -p no:cacheprovider

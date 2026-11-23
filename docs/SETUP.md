@@ -75,7 +75,7 @@ Project: https://github.com/opensandbox-group/OpenSandbox
 Needs Docker, kind and kubectl.
 
 ```bash
-uv run bestiary k8s up      # cluster + image + manifests
+uv run bestiary k8s up      # cluster + image + manifests (k8s/overlays/kind)
 uv run bestiary play --only 11
 uv run bestiary k8s down
 ```
@@ -86,6 +86,11 @@ The reviewer pod calls Ollama on your host:
 - Linux: start Ollama with `OLLAMA_HOST=0.0.0.0 ollama serve` and change
   `OLLAMA_HOST` in `k8s/reviewer-a2a.yaml` to your docker bridge IP
   (often `http://172.17.0.1:11434`).
+
+## Level 4: a GPU in the cloud (optional)
+
+To run all of it as pods on one GPU instance, with nothing but a terminal on your laptop, see
+[AWS_DEPLOY.md](AWS_DEPLOY.md). It costs money until you tear it down.
 
 ## Real pull requests on GitHub (encounter 8)
 
