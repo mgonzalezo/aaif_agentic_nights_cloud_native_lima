@@ -156,7 +156,10 @@ git rev-parse --short HEAD
 
 # ---- 8. images: build, import into k3s containerd -----------------------------------------------------
 log "8/12 build and import images"
-export DOCKER_BUILDKIT=1
+# The Ubuntu docker.io package has no buildx; the GPU AMI (docker-ce) does. Use BuildKit only if buildx works.
+docker buildx version >/dev/null 2>&1 || apt-get install -y -qq docker-buildx >/dev/null 2>&1 || true
+if docker buildx version >/dev/null 2>&1; then export DOCKER_BUILDKIT=1; else export DOCKER_BUILDKIT=0; fi
+echo "docker build: BuildKit=$DOCKER_BUILDKIT"
 build_import() { # <tag> <docker build args...>
   local tag=$1; shift
   docker build -t "$tag" "$@"
