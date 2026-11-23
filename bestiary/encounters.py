@@ -255,7 +255,7 @@ def e5_bug(ctx: Ctx) -> None:
         _, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
         issue = json.loads(text)
         prompt = GOOSE_PROMPT.format(n=n, title=issue["title"], body_first_line=issue["body"].splitlines()[0])
-        env = dict(os.environ)
+        env = dict(os.environ, GOOSE_MODE="auto", GOOSE_DISABLE_KEYRING="1")  # never prompt, no OS keyring in a pod
         if p.name == "ollama":
             env.update(GOOSE_PROVIDER="ollama", GOOSE_MODEL=p.model, OLLAMA_HOST=ctx.settings.ollama_host)
         else:
@@ -289,7 +289,10 @@ async def _sandbox_pytest(domain: str, image: str) -> str:
     from opensandbox import Sandbox
     from opensandbox.config import ConnectionConfig
 
-    sb = await Sandbox.create(image, connection_config=ConnectionConfig(domain=domain), timeout=timedelta(minutes=5))
+    # api_key: the Kubernetes runtime of the OpenSandbox server refuses to start without one;
+    # the SDK also reads OPEN_SANDBOX_API_KEY by itself.
+    api_key = os.environ.get("OPEN_SANDBOX_API_KEY") or None
+    sb = await Sandbox.create(image, connection_config=ConnectionConfig(domain=domain, api_key=api_key), timeout=timedelta(minutes=5))
     try:
         for path in sorted(WORK_DIR.rglob("*.py")) + [WORK_DIR / "AGENTS.md"]:
             rel = path.relative_to(WORK_DIR).as_posix()
@@ -298,7 +301,7 @@ async def _sandbox_pytest(domain: str, image: str) -> str:
         out = "".join(m.text for m in result.logs.stdout) + "".join(m.text for m in result.logs.stderr)
         return out
     finally:
-        await sb.kill()
+        await sb.destroy()  # kill the sandbox and close the local client (opensandbox 1.2.1)
 
 
 def e6_tests(ctx: Ctx) -> None:
@@ -396,6 +399,63 @@ def e8_pr(ctx: Ctx) -> None:
 
 
 # --------------------------------------------------------------------------- 9
+ROUTER_PROMPT = "In one short sentence, say which model you are."
+
+
+def _kube(args: list[str]) -> str:
+    """kubectl through the console's service account. Raises Fallback if it cannot run."""
+    kubectl = shutil.which("kubectl")
+    if not kubectl:
+        raise Fallback("kubectl not installed")
+    r = subprocess.run([kubectl, *args], capture_output=True, text=True, timeout=20)
+    if r.returncode != 0:
+        raise Fallback(f"kubectl {' '.join(args[:3])}: {r.stderr.strip()[:200]}")
+    return r.stdout
+
+
+def _router_call(ctx: Ctx, model: str) -> dict:
+    """One /v1/responses request through Agent Router. Returns the summary shown on screen."""
+    import httpx
+
+    from bestiary.llm import _extra_body, output_text
+
+    base = ctx.settings.agent_router_url.rstrip("/")
+    body = {"model": model, "input": ROUTER_PROMPT, "store": False, **_extra_body()}
+    started = time.time()
+    try:
+        r = httpx.post(f"{base}/v1/responses", json=body, timeout=180)
+    except httpx.TransportError as err:
+        raise Fallback(f"Agent Router not reachable at {base}: {type(err).__name__}") from err
+    if r.status_code != 200:
+        raise Fallback(f"Agent Router answered {r.status_code}: {r.text[:160]}")
+    data = r.json()
+    return {
+        "http_status": r.status_code,
+        "seconds": round(time.time() - started, 1),
+        "asked_for": model,
+        "served_by_model": data.get("model"),
+        "answer": output_text(data)[:200],
+    }
+
+
+def _router_log(ctx: Ctx, lines: int = 2) -> None:
+    """The router's own access log: which backend served the last requests."""
+    try:
+        out = _kube(["-n", ctx.settings.namespace, "logs", "deploy/agent-router", f"--tail={lines}"])
+    except Fallback:
+        return
+    keys = ("gen_ai.request.model", "gen_ai.response.model", "gen_ai.provider.name", "upstream_cluster", "response_code", "duration")
+    rows = []
+    for line in out.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        rows.append({k: entry.get(k) for k in keys if k in entry})
+    if rows:
+        ctx.wire("Agent Router access log (kubectl logs deploy/agent-router)", rows)
+
+
 def e9_detour(ctx: Ctx) -> None:
     encounter_header(ctx, "9", "Detour (side quest)", "The team grows: many models", ["switchy", "bulwark"])
     ctx.say("Myth 2: do all these projects do the same thing? Both are GATEWAYS, but they guard different doors.")
@@ -403,15 +463,40 @@ def e9_detour(ctx: Ctx) -> None:
     for col in ("", "Bulwark (agentgateway)", "Switchy (Agent Router)"):
         compare.add_column(col)
     compare.add_row("Main door", "Agents to tools and agents (MCP, A2A)", "Apps to models (OpenAI-compatible API)")
+    compare.add_row("Guards", "TOOLS: hides delete_branch", "MODELS: routes and fails over")
     compare.add_row("Built on", "Rust proxy", "Envoy (formerly Envoy AI Gateway, a CNCF Envoy sub-project)")
-    compare.add_row("In this story", "Hides delete_branch", "Would route goose to Ollama or a cloud model")
+    compare.add_row("In this story", "Hides delete_branch", "Sends a request to the main model; if it is down, to the small one")
     ctx.console.print(compare)
+
+    main_model, small_model = ctx.settings.ollama_model, ctx.settings.failover_model
+
+    def live():
+        if not ctx.settings.is_cloud:
+            raise Fallback("Agent Router runs in the cluster (BESTIARY_PROFILE=cloud)")
+        ns, svc = ctx.settings.namespace, "ollama-main"
+        ctx.wire("Step 1: request through Agent Router, main model", {"POST": f"{ctx.settings.agent_router_url}/v1/responses", "model": main_model})
+        ctx.wire("Response", _router_call(ctx, main_model))
+        _router_log(ctx)
+        ctx.say(f"Step 2: simulate an outage. Service {svc} loses its endpoints (one GPU, one Ollama pod: a simulated failure).", "yellow")
+
+        def patch(selector: str) -> str:
+            return _kube(["-n", ns, "patch", "svc", svc, "--type", "merge", "-p", json.dumps({"spec": {"selector": {"app": selector}}})])
+
+        patch("ollama-off")
+        try:
+            ctx.wire("Same request, main backend down", {"model": main_model})
+            ctx.wire("Response", _router_call(ctx, main_model))
+            _router_log(ctx)
+        finally:
+            patch("ollama")
+            ctx.say(f"Service {svc} restored.", "dim")
+        ctx.say(f"Failover: asked for {main_model}, answered by {small_model}. The app never changed its URL.", "bold green")
 
     def didactic():
         cfg = (REPO_ROOT / "agent-router" / "README.md").read_text(encoding="utf-8")
         ctx.wire("How the recorded run works (agent-router/README.md)", cfg)
 
-    ctx.attempt("e9_agent_router", _replay_only("Agent Router is shown from a recorded aigw run"), didactic)
+    ctx.attempt("e9_agent_router", live, didactic)
     ctx.pause()
 
 
@@ -419,6 +504,23 @@ def e9_detour(ctx: Ctx) -> None:
 def e10_dojo(ctx: Ctx) -> None:
     encounter_header(ctx, "10", "The dojo (epilogue)", "Improve the model later", ["dojolotl"])
     ctx.say("Same tests, different purpose: in training, passing tests become a reward.")
+
+    def live():
+        import httpx
+
+        base = ctx.settings.openenv_url.rstrip("/")
+        if not base:
+            raise Fallback("no OpenEnv server configured (BESTIARY_OPENENV_URL; the cloud profile sets it)")
+        try:
+            ctx.wire(f"GET {base}/health", httpx.get(f"{base}/health", timeout=5).json())
+            ctx.wire("POST /reset   (env.reset())", httpx.post(f"{base}/reset", json={}, timeout=15).json())
+            cli_py = (WORK_DIR / "farolito" / "cli.py").read_text(encoding="utf-8")
+            ctx.wire("POST /step   (env.step: the farolito/cli.py left by encounter 5)", {"action": {"cli_py": f"<{len(cli_py)} characters>"}})
+            step = httpx.post(f"{base}/step", json={"action": {"cli_py": cli_py}}, timeout=90).json()
+        except httpx.TransportError as err:
+            raise Fallback(f"OpenEnv server not reachable at {base}: {type(err).__name__}") from err
+        ctx.wire("step result: observation, reward, done", step)
+        ctx.say(f"reward = {step.get('reward')}: the environment ran farolito's tests in its own container.", "bold green")
 
     def didactic():
         r = subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=WORK_DIR, capture_output=True, text=True, timeout=60)
@@ -431,27 +533,48 @@ def e10_dojo(ctx: Ctx) -> None:
         })
         ctx.say("This is an explanation, not OpenEnv itself. In OpenEnv the environment runs in a container with reset()/step().", "dim")
 
-    ctx.attempt("e10_openenv", _replay_only("OpenEnv is shown as replay or explanation"), didactic)
+    ctx.attempt("e10_openenv", live, didactic)
     ctx.pause()
 
 
 # --------------------------------------------------------------------------- K8s
+GPU_COLUMNS = (
+    "custom-columns=POD:.metadata.name,NODE:.spec.nodeName,"
+    r"GPU:.spec.containers[*].resources.limits.nvidia\.com/gpu"
+)
+
+
 def ek_kubernetes(ctx: Ctx) -> None:
     ctx.console.rule("[bold]Region: Kubernetes")
-    ctx.say("Myth 3: do I need Kubernetes to start? No. Everything so far ran on this laptop.", "bold yellow")
-    ctx.say("Kubernetes is where you go when many teams share the same tools, gateway and policies.")
-    k8s_url = os.environ.get("BESTIARY_K8S_GATEWAY_URL", "http://localhost:30300/mcp")
+    cloud = ctx.settings.is_cloud
+    ns = ctx.settings.namespace
+    if cloud:
+        ctx.say("Myth 3: do I need Kubernetes to start? No. But you are looking at it: this game runs in a pod.", "bold yellow")
+        ctx.say(f"I am {ctx.where._here()}. Everything before this also ran here, as pods.")
+        k8s_url = ctx.settings.gateway_url  # the agentgateway sidecar of this pod
+    else:
+        ctx.say("Myth 3: do I need Kubernetes to start? No. Everything so far ran on this laptop.", "bold yellow")
+        ctx.say("Kubernetes is where you go when many teams share the same tools, gateway and policies.")
+        k8s_url = os.environ.get("BESTIARY_K8S_GATEWAY_URL", "http://localhost:30300/mcp")
 
     def live():
         kubectl = shutil.which("kubectl")
         if not kubectl:
             raise Fallback("kubectl not installed")
-        r = subprocess.run([kubectl, "get", "pods", "-n", "bestiary", "-o", "wide"], capture_output=True, text=True, timeout=15)
+        r = subprocess.run([kubectl, "get", "pods", "-n", ns, "-o", "wide"], capture_output=True, text=True, timeout=15)
         if r.returncode != 0:
-            raise Fallback("no 'bestiary' namespace (run: uv run bestiary k8s up)")
-        ctx.wire("kubectl get pods -n bestiary", r.stdout)
-        ctx.wire("tools/list through agentgateway running in kind", _run(_mcp_list(k8s_url)))
-        ctx.say("Same creatures, same YAML ideas, now as pods. Ollama still runs on the host.", "bold green")
+            hint = r.stderr.strip()[:200] if cloud else "no 'bestiary' namespace (run: uv run bestiary k8s up)"
+            raise Fallback(hint)
+        ctx.wire(f"kubectl get pods -n {ns} -o wide", r.stdout)
+        if cloud:
+            gpu = subprocess.run([kubectl, "get", "pods", "-n", ns, "-o", GPU_COLUMNS], capture_output=True, text=True, timeout=15)
+            ctx.wire("GPUs requested per pod (nvidia.com/gpu)", gpu.stdout or gpu.stderr)
+        via = "the agentgateway sidecar of this pod" if cloud else "agentgateway running in kind"
+        ctx.wire(f"tools/list through {via}", _run(_mcp_list(k8s_url)))
+        if cloud:
+            ctx.say("The model runs on the GPU in its own pod. The gateway filters tools next to the game.", "bold green")
+        else:
+            ctx.say("Same creatures, same YAML ideas, now as pods. Ollama still runs on the host.", "bold green")
 
     def didactic():
         ctx.wire("k8s/ in this repo (applied with: uv run bestiary k8s up)", sorted(p.name for p in (REPO_ROOT / "k8s").glob("*")))

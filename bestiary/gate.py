@@ -71,7 +71,7 @@ def _goose_once(provider) -> tuple[bool, float, str]:
     from bestiary.encounters import GOOSE_PROMPT
 
     workspace.reset()
-    env = __import__("os").environ.copy()
+    env = {**__import__("os").environ, "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1"}
     if provider.name == "ollama":
         env.update(GOOSE_PROVIDER="ollama", GOOSE_MODEL=provider.model, OLLAMA_HOST=settings().ollama_host)
     else:

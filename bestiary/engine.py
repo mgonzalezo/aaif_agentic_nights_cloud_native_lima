@@ -20,6 +20,7 @@ from rich.text import Text
 from bestiary import sprites
 from bestiary.config import REPLAY_DIR, Settings
 from bestiary.llm import Detection
+from bestiary.where import Where
 
 DATA = Path(__file__).parent / "data" / "creatures.yaml"
 
@@ -59,6 +60,7 @@ class Ctx:
     record: bool = False
     events: list[dict] = field(default_factory=list)
     badge: str = "LIVE"
+    where: Where = field(default_factory=Where)
     _pending_live: bool = False
 
     def _flush_badge(self) -> None:
@@ -138,7 +140,7 @@ class Ctx:
         self.console.print(t)
 
 
-def creature_card(c: dict, scale: int = 1) -> Panel:
+def creature_card(c: dict, scale: int = 1, where: str = "") -> Panel:
     stats = c["stats"]
     lines = Text()
     lines.append(f"{c['name']}", style="bold")
@@ -148,13 +150,16 @@ def creature_card(c: dict, scale: int = 1) -> Panel:
     for key in ("autonomy", "reach", "control", "startup"):
         v = stats[key]
         lines.append(f"{key:<9}{'#' * v}{'.' * (5 - v)} {v}\n")
+    if where:
+        lines.append("runs on: ", style="dim")
+        lines.append(where, style="cyan")
     return Panel(Group(sprites.render(c["id"], scale), lines), width=34, border_style="grey50")
 
 
 def encounter_header(ctx: Ctx, number: str, title: str, step: str, creature_ids: list[str]) -> None:
     ctx.console.rule(f"[bold]Encounter {number}: {title}")
     ctx.say(f"Workflow step: {step}", "italic")
-    ctx.console.print(Columns([creature_card(ctx.creatures[i]) for i in creature_ids]))
+    ctx.console.print(Columns([creature_card(ctx.creatures[i], where=ctx.where.describe(i)) for i in creature_ids]))
 
 
 def team_table(creatures: dict[str, dict], highlight: str | None = None) -> Table:

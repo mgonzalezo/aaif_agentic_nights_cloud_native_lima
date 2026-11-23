@@ -40,10 +40,25 @@ def cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def _host_port(url: str, default_port: int = 80) -> tuple[str, int]:
+    """host and port of 'http://host:port/path' or 'host:port'."""
+    hostport = url.split("//", 1)[-1].split("/", 1)[0]
+    host, _, port = hostport.partition(":")
+    return host.replace("localhost", "127.0.0.1"), int(port or default_port)
+
+
+def _reachable(url: str) -> bool:
+    try:
+        host, port = _host_port(url)
+        return port_open(port, host)
+    except ValueError:
+        return False
+
+
 def cmd_doctor(_: argparse.Namespace) -> int:
     s = settings()
     d = detect(s)
-    t = Table(title="bestiary doctor")
+    t = Table(title=f"bestiary doctor (profile: {s.profile})")
     t.add_column("Check")
     t.add_column("Status")
     t.add_column("Unlocks")
@@ -54,13 +69,22 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     row("Python + uv", True, "game, MCP, A2A, AGENTS.md, Skills", sys.version.split()[0])
     row("Model", bool(d.provider), "agent loop, reviewer, goose", d.provider.label() if d.provider else "; ".join(d.notes))
     row("goose", bool(shutil.which("goose")), "encounter 5 live")
-    row("agentgateway", bool(shutil.which("agentgateway")), "encounter 3 live")
-    row("gateway listening", port_open(int(s.gateway_url.rsplit(":", 1)[1].split("/")[0])), "encounters 3 and 8", s.gateway_url)
-    row("Docker", bool(shutil.which("docker")), "OpenSandbox, kind")
-    host, _, port = s.sandbox_domain.partition(":")
-    row("OpenSandbox server", port_open(int(port or 80), host.replace("localhost", "127.0.0.1")), "encounter 6 live", s.sandbox_domain)
-    row("kind + kubectl", bool(shutil.which("kind") and shutil.which("kubectl")), "Kubernetes region")
-    row("aigw (Agent Router)", bool(shutil.which("aigw")), "record encounter 9 (Linux/macOS)")
+    if s.is_cloud:
+        # Services are other pods or sidecars: check that they answer, not that binaries exist.
+        row("forge MCP", _reachable(s.forge_url), "encounters 2, 3, 8", s.forge_url)
+        row("agentgateway (sidecar)", _reachable(s.gateway_url), "encounters 3 and 8", s.gateway_url)
+        row("reviewer A2A", _reachable(s.reviewer_url), "encounter 7 live", s.reviewer_url)
+        row("Agent Router", _reachable(s.agent_router_url), "encounter 9 live", s.agent_router_url)
+        row("OpenSandbox server", _reachable(s.sandbox_domain), "encounter 6 live", s.sandbox_domain)
+        row("OpenEnv environment", _reachable(s.openenv_url), "encounter 10 live", s.openenv_url)
+        row("kubectl (read access)", bool(shutil.which("kubectl")), "Kubernetes region")
+    else:
+        row("agentgateway", bool(shutil.which("agentgateway")), "encounter 3 live")
+        row("gateway listening", _reachable(s.gateway_url), "encounters 3 and 8", s.gateway_url)
+        row("Docker", bool(shutil.which("docker")), "OpenSandbox, kind")
+        row("OpenSandbox server", _reachable(s.sandbox_domain), "encounter 6 live", s.sandbox_domain)
+        row("kind + kubectl", bool(shutil.which("kind") and shutil.which("kubectl")), "Kubernetes region")
+        row("aigw (Agent Router)", bool(shutil.which("aigw")), "record encounter 9 (Linux/macOS)")
     gh_ok = s.forge_backend != "github" or bool(s.github_repo and s.github_token)
     row("Forge backend", gh_ok, "encounter 8", s.forge_backend + (f" {s.github_repo}" if s.github_repo else ""))
     Console().print(t)
@@ -119,10 +143,10 @@ def cmd_k8s(args: argparse.Namespace) -> int:
     k8s = REPO_ROOT / "k8s"
     steps = {
         "up": [
-            ["kind", "create", "cluster", "--name", "bestiary", "--config", str(k8s / "kind.yaml")],
-            ["docker", "build", "-t", "bestiary-services:dev", "-f", str(k8s / "Dockerfile"), str(REPO_ROOT)],
+            ["kind", "create", "cluster", "--name", "bestiary", "--config", str(k8s / "overlays" / "kind" / "kind-cluster.yaml")],
+            ["docker", "build", "--target", "services", "-t", "bestiary-services:dev", "-f", str(k8s / "Dockerfile"), str(REPO_ROOT)],
             ["kind", "load", "docker-image", "bestiary-services:dev", "--name", "bestiary"],
-            ["kubectl", "apply", "-k", str(k8s)],
+            ["kubectl", "apply", "-k", str(k8s / "overlays" / "kind")],
             ["kubectl", "-n", "bestiary", "rollout", "status", "deploy/forge-mcp", "--timeout=180s"],
             ["kubectl", "-n", "bestiary", "rollout", "status", "deploy/agentgateway", "--timeout=180s"],
         ],
