@@ -1,0 +1,28 @@
+{
+  "encounter": "e8_pr",
+  "recorded_at": "2026-11-23 13:10 UTC",
+  "model": "ollama:qwen3.5:35b",
+  "seconds": 0.0,
+  "events": [
+    {
+      "kind": "MCP tools/call create_pull_request through agentgateway",
+      "data": {
+        "branch": "fix/7-missing-config-39437",
+        "title": "cli: friendly error when the config file is missing",
+        "body": "Fixes #7\n\n## What changed\nCatch FileNotFoundError, print a one-line error to stderr and exit with code 2.\n\n## How I tested it\n`python -m pytest -q`\n\n_Opened live during a talk by Agentic Bestiary._"
+      }
+    },
+    {
+      "kind": "Pull request",
+      "data": {
+        "number": 1,
+        "url": "forge://farolito/pull/1",
+        "head": "fix/7-missing-config-39437",
+        "base": "main",
+        "files": [
+          "farolito/cli.py"
+        ]
+      }
+    }
+  ]
+}

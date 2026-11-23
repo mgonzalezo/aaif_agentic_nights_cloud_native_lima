@@ -1,0 +1,12 @@
+{
+  "encounter": "e1_doubt",
+  "recorded_at": "2026-11-23 13:09 UTC",
+  "model": "ollama:qwen3.5:35b",
+  "seconds": 0.0,
+  "events": [
+    {
+      "kind": "farolito/AGENTS.md",
+      "data": "# AGENTS.md\n\n## How to run the tests\n- `python -m pytest -q` from the repository root. No network needed.\n\n## Repo rules\n- Keep changes to one file when possible.\n- Error messages go to stderr and start with `farolito: `.\n- A missing or unreadable config file must exit with code 2, never a traceback.\n- Do not delete branches. Do not push to `main`; open a pull request.\n"
+    }
+  ]
+}

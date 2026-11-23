@@ -1,0 +1,39 @@
+{
+  "encounter": "e3_gateway",
+  "recorded_at": "2026-11-23 13:09 UTC",
+  "model": "ollama:qwen3.5:35b",
+  "seconds": 0.0,
+  "events": [
+    {
+      "kind": "tools/list WITHOUT the gateway",
+      "data": [
+        "list_issues",
+        "read_issue",
+        "read_file",
+        "create_branch",
+        "create_pull_request",
+        "delete_branch"
+      ]
+    },
+    {
+      "kind": "tools/list THROUGH agentgateway",
+      "data": [
+        "list_issues",
+        "read_issue",
+        "read_file",
+        "create_branch",
+        "create_pull_request"
+      ]
+    },
+    {
+      "kind": "The game (not the model) calls delete_branch through the gateway anyway",
+      "data": {
+        "rejected": true,
+        "error": {
+          "code": -32602,
+          "message": "unknown resource"
+        }
+      }
+    }
+  ]
+}

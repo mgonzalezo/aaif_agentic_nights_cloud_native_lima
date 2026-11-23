@@ -51,7 +51,7 @@ uv run bestiary doctor
 | 1 | [agentgateway](https://agentgateway.dev) (Windows: use WSL2) | Encounters 3 and 8: tool filtering |
 | 2 | Docker and the OpenSandbox server | Encounter 6: tests in a sandbox |
 | 3 | kind and kubectl | The Kubernetes region |
-| Cloud | An AWS account with GPU quota | Everything as pods on one GPU instance, nothing on your laptop: [docs/AWS_DEPLOY.md](docs/AWS_DEPLOY.md) |
+| Cloud | An AWS account (CPU instance, no GPU quota needed) | Everything as pods on one EC2 host, nothing on your laptop: [docs/AWS_DEPLOY.md](docs/AWS_DEPLOY.md). Step by step with measured results: [docs/TRY_IT.md](docs/TRY_IT.md) |
 
 Step-by-step instructions per OS: [docs/SETUP.md](docs/SETUP.md).
 

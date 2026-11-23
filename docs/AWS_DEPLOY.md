@@ -9,9 +9,8 @@ delete it when you are done.
 > for the disk and the public IPv4 address. Auto-stop only *stops* the instance; the disk keeps
 > billing. When you finish, run **teardown** (see the end) and check that it prints `PASS`.
 
-> Status of this page: the pinned versions and every flag below were checked against official
-> docs and release pages on 2026-11-23. See "What was verified" at the end for what has and has
-> not been run.
+> Status of this page: deployed and rehearsed on a CPU instance on 2026-11-23; the GPU path was
+> not run. See "What was verified" at the end, and [TRY_IT.md](TRY_IT.md) to try it step by step.
 
 ## 1. What you need
 
@@ -205,16 +204,26 @@ pods through NodePorts, and there is no console pod. See `docs/SETUP.md`.
 
 ## 8. What was verified
 
-Verified by reading official docs or source on 2026-11-23 (pins): k3s `v1.37.2+k3s1`, NVIDIA
-device plugin chart `0.20.2`, Helm `v3.22.1`, Ollama `0.40.16`, Agent Router `v1.3.0`,
-agentgateway `v1.7.0`, OpenSandbox `release-1.2.1`, goose `v1.60.1`, OpenEnv `0.14.0`, qwen3.5 tags and sizes, the
-Deep Learning AMI SSM parameter path, the `/v1/responses` endpoint in Ollama and in Agent Router.
+**Run on a real deployment (2026-11-23, c7i.8xlarge, CPU only, `qwen3.5:35b` with thinking off):**
+bootstrap from user data and again by hand, all images built on the host, k3s with every pod Ready,
+`bestiary doctor` all `ok`, a stop and start of the instance (the stack recovers by itself in about a
+minute), the reliability gate (agent loop 50/50 p95 3.5 s, reviewer 50/50 p95 4.8 s, goose 14/20),
+and three full rehearsals of the game with 12 recorded replays (see [TRY_IT.md](TRY_IT.md)).
+Encounter 9 observed a real failover from the 35B model to the 4B model, and the game now refuses
+to claim one it did not observe. Replays play back offline on a laptop.
 
-Run and tested: the game and its 20+ tests on a laptop, the OpenEnv environment against OpenEnv
-`0.14.0` (reset and step over HTTP), the kustomize overlays (rendered), and the infrastructure
-templates (validated, never deployed to AWS from this page).
+**Verified from official docs or source, 2026-11-23 (pins):** k3s `v1.37.2+k3s1`, Helm `v3.22.1`,
+Ollama `0.40.16`, Agent Router `v1.3.0`, agentgateway `v1.7.0`, OpenSandbox `release-1.2.1`, goose
+`v1.60.1`, OpenEnv `0.14.0`, NVIDIA device plugin chart `0.20.2`, qwen3.5 tags and sizes.
 
-**Not verified until a deployment exists** (the report in the pull request says what happened): the GPU
-stack on the instance, Agent Router in front of Ollama's `/v1/responses` and the failover
-trigger, OpenSandbox pod-IP reachability, goose against the chosen model, which qwen3.5 variant
-passes the gate, and the real GitHub pull request.
+**Not verified:** the GPU path (the NVIDIA steps and the `ec2` overlay were never run: this
+deployment was CPU only), a real GitHub pull request (encounter 8 used the local forge),
+`present.ps1` (the Session Manager plugin is not installed on the build laptop, so the host was
+driven with `aws ssm send-command`), and Graviton (arm64). `ollama ps` showed a small "GPU" share
+on this CPU-only host; I did not investigate it and did not rely on it.
+
+**Bugs found only by running it** (all fixed on this branch): `kubectl wait` before the node
+registered, a missing buildx on the Ubuntu `docker.io` package, the OpenSandbox chart creating
+namespaces and a duplicate `[ingress]` table, the loopback-only forge failing a pod-IP probe, the
+router reusing its connection so the simulated outage did nothing (and the game claiming a
+failover anyway), and the gateway's rejection arriving as an exception group.

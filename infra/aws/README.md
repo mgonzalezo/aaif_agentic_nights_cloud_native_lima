@@ -14,6 +14,7 @@ only through SSM Session Manager. Budget alerts (50/80/100 % actual, 100 % forec
 | `present.ps1/.sh` | SSM session into the console pod (`-Doctor`, `-Shell`, `-Host`, `-Logs` modes) |
 | `teardown.ps1/.sh` | Delete the stack, then audit that nothing billable is left (PASS/FAIL exit code) |
 | `bootstrap.sh` | Runs on the host from user data: NVIDIA runtime, k3s, Helm, device plugin, images, OpenSandbox, `kubectl apply -k k8s/overlays/ec2`, model pull |
+| `refresh.sh` | On the host: pull the latest commit, `--apply` re-runs bootstrap (about 1 minute) |
 | `opensandbox-values.yaml` | Helm values for the OpenSandbox server (Kubernetes runtime) |
 
 ## Order of use

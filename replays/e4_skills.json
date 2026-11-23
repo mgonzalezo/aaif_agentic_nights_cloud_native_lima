@@ -1,0 +1,19 @@
+{
+  "encounter": "e4_skills",
+  "recorded_at": "2026-11-23 13:09 UTC",
+  "model": "ollama:qwen3.5:35b",
+  "seconds": 0.0,
+  "events": [
+    {
+      "kind": "Token meter",
+      "data": {
+        "load everything": 595,
+        "progressive disclosure (descriptions + 1 skill)": 274
+      }
+    },
+    {
+      "kind": "Activated skill: open-upstream-pr",
+      "data": "---\nname: open-upstream-pr\ndescription: How to open a pull request to farolito upstream (branch naming, DCO sign-off, PR template). Use when a fix is ready to submit.\n---\n\n# Open an upstream pull request\n\n1. Branch name: `fix/<issue-number>-<short-slug>`, for example `fix/7-missing-config`.\n2. Every commit needs a DCO sign-off line: `Signed-off-by: Name <email>`.\n3. PR title: `<area>: <what changed>`, for example `cli: friendly error when config is missing`.\n4. PR body must use this template:\n\n```\nFixes #<issue-number>\n\n## What changed\n<one or two sentences>\n\n## How I tested it\n`python -m pytest -q`\n```\n\n5. Never push to `main` and never delete branches.\n"
+    }
+  ]
+}
