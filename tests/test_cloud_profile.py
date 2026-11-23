@@ -312,3 +312,20 @@ def test_a_gateway_rejection_is_shown_as_evidence_not_as_a_crash():
     finally:
         encounters._mcp_call = original
     assert answer == {"rejected": True, "error": {"code": -32602, "message": "unknown resource"}}
+
+
+def test_router_metrics_show_which_backend_served_which_model():
+    from bestiary.encounters import _parse_router_metrics
+
+    text = (
+        '# HELP x\n'
+        'gen_ai_server_request_duration_seconds_count{gen_ai_backend="bestiary/ollama-main",gen_ai_original_model="qwen3.5:35b",'
+        'gen_ai_response_model="qwen3.5:35b",otel_scope_name="x",} 1\n'
+        'gen_ai_server_request_duration_seconds_count{gen_ai_backend="bestiary/ollama-small",gen_ai_original_model="qwen3.5:35b",'
+        'gen_ai_response_model="qwen3.5:4b",} 2\n'
+        'gen_ai_client_token_usage_count{gen_ai_backend="ignored",} 9\n'
+    ).replace("\\n", "\n")
+    assert _parse_router_metrics(text) == [
+        {"backend": "bestiary/ollama-main", "asked_for": "qwen3.5:35b", "answered_by": "qwen3.5:35b", "requests": 1},
+        {"backend": "bestiary/ollama-small", "asked_for": "qwen3.5:35b", "answered_by": "qwen3.5:4b", "requests": 2},
+    ]

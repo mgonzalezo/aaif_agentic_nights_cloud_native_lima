@@ -12,6 +12,7 @@ import inspect
 import json
 import os
 import queue
+import re
 import shlex
 import shutil
 import subprocess
@@ -462,22 +463,33 @@ def _router_call(ctx: Ctx, model: str) -> dict:
     }
 
 
-def _router_log(ctx: Ctx, lines: int = 2) -> None:
-    """The router's own access log: which backend served the last requests."""
-    try:
-        out = _kube(["-n", ctx.settings.namespace, "logs", "deploy/agent-router", f"--tail={lines}"])
-    except Fallback:
-        return
-    keys = ("gen_ai.request.model", "gen_ai.response.model", "gen_ai.provider.name", "upstream_cluster", "response_code", "duration")
+def _parse_router_metrics(text: str) -> list[dict]:
     rows = []
-    for line in out.splitlines():
-        try:
-            entry = json.loads(line)
-        except ValueError:
+    for line in text.splitlines():
+        if not line.startswith("gen_ai_server_request_duration_seconds_count{"):
             continue
-        rows.append({k: entry.get(k) for k in keys if k in entry})
+        labels = dict(re.findall(r'(\w+)="([^"]*)"', line))
+        rows.append({
+            "backend": labels.get("gen_ai_backend"),
+            "asked_for": labels.get("gen_ai_original_model"),
+            "answered_by": labels.get("gen_ai_response_model"),
+            "requests": int(float(line.rsplit(" ", 1)[1])),
+        })
+    return rows
+
+
+def _router_metrics(ctx: Ctx) -> None:
+    """Requests served per backend, from the router's own Prometheus metrics (admin port 1064)."""
+    import httpx
+
+    host = ctx.settings.agent_router_url.split("//", 1)[-1].split("/", 1)[0].rsplit(":", 1)[0]
+    try:
+        text = httpx.get(f"http://{host}:1064/metrics", timeout=5).text
+    except httpx.HTTPError:
+        return
+    rows = _parse_router_metrics(text)
     if rows:
-        ctx.wire("Agent Router access log (kubectl logs deploy/agent-router)", rows)
+        ctx.wire("Agent Router metrics: requests served per backend (:1064/metrics)", sorted(rows, key=lambda r: str(r["backend"])))
 
 
 def e9_detour(ctx: Ctx) -> None:
@@ -501,7 +513,7 @@ def e9_detour(ctx: Ctx) -> None:
         ctx.wire("Step 1: request through Agent Router, main model", {"POST": f"{ctx.settings.agent_router_url}/v1/responses", "model": main_model})
         first = _router_call(ctx, main_model)
         ctx.wire("Response", first)
-        _router_log(ctx)
+        _router_metrics(ctx)
         ctx.say(f"Step 2: simulate an outage. Service {svc} loses its endpoints (one GPU, one Ollama pod: a simulated failure).", "yellow")
 
         def patch(selector: str) -> str:
@@ -513,7 +525,7 @@ def e9_detour(ctx: Ctx) -> None:
             ctx.wire("Same request, main backend down", {"model": main_model})
             second = _router_call(ctx, main_model)
             ctx.wire("Response", second)
-            _router_log(ctx)
+            _router_metrics(ctx)
         finally:
             patch("ollama")
             ctx.say(f"Service {svc} restored.", "dim")
