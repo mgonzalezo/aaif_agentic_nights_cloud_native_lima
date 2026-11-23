@@ -35,7 +35,7 @@ PALETTE = {
 }
 
 SPRITES: dict[str, list[str]] = {
-    # goose -> Mender, a mechanic raccoon holding a wrench
+    # goose -> Chambero, a mechanic raccoon holding a wrench
     "mender": [
         "................",
         "..kk........kk..",
@@ -54,7 +54,7 @@ SPRITES: dict[str, list[str]] = {
         "..k.kssk.kssk...",
         "....kkk...kkk...",
     ],
-    # MCP -> Octoplug, an octopus whose arms end in plugs
+    # MCP -> Chaka, an octopus whose arms end in plugs
     "octoplug": [
         "................",
         ".....kkkkkk.....",
@@ -92,7 +92,7 @@ SPRITES: dict[str, list[str]] = {
         ".kssk....kssk...",
         "..kk......kk....",
     ],
-    # AGENTS.md -> Scribbit, a living notebook
+    # AGENTS.md -> DeathNote, a living notebook
     "scribbit": [
         "................",
         "...kkkkkkkkkk...",
@@ -111,7 +111,7 @@ SPRITES: dict[str, list[str]] = {
         "..kttk...kttk...",
         "...kk.....kk....",
     ],
-    # Agent Skills -> Satchel, a backpack with labelled pockets
+    # Agent Skills -> Navaja Suiza, a backpack with labelled pockets
     "satchel": [
         "................",
         "......kkkk......",
@@ -130,7 +130,7 @@ SPRITES: dict[str, list[str]] = {
         "...ksk....ksk...",
         "....k......k....",
     ],
-    # agentgateway -> Bulwark, a guardian armadillo with a banded shell
+    # agentgateway -> Rondero, a guardian armadillo with a banded shell
     "bulwark": [
         "................",
         "................",
@@ -149,7 +149,7 @@ SPRITES: dict[str, list[str]] = {
         "................",
         "................",
     ],
-    # Agent Router -> Switchy, a capybara operating a rail switch lever
+    # Agent Router -> Cobrador, a capybara operating a rail switch lever
     "switchy": [
         "................",
         "..............k.",
@@ -168,7 +168,7 @@ SPRITES: dict[str, list[str]] = {
         "..kk........kk..",
         "kkkkkkkkkkkkkkkk",
     ],
-    # Open Responses -> Glyphstone, a stone tablet with several scripts
+    # Open Responses -> Duolingo, a stone tablet with several scripts
     "glyphstone": [
         "................",
         "....kkkkkkkk....",
@@ -187,7 +187,7 @@ SPRITES: dict[str, list[str]] = {
         "...kkkkkkkkkk...",
         "................",
     ],
-    # OpenSandbox -> Glasshell, a turtle with a glass shell (a bubble inside)
+    # OpenSandbox -> Caparazón, a turtle with a glass shell (a bubble inside)
     "glasshell": [
         "................",
         "................",
@@ -206,7 +206,7 @@ SPRITES: dict[str, list[str]] = {
         "................",
         "................",
     ],
-    # OpenEnv -> Dojolotl, an axolotl wearing a dojo headband
+    # OpenEnv -> Amauta, an axolotl wearing a dojo headband
     "dojolotl": [
         "................",
         ".ik..........ki.",

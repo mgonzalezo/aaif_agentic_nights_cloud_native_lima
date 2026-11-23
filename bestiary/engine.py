@@ -163,7 +163,7 @@ def encounter_header(ctx: Ctx, number: str, title: str, step: str, creature_ids:
 
 
 def team_table(creatures: dict[str, dict], highlight: str | None = None) -> Table:
-    t = Table(title="The Lamplighters", show_lines=False)
+    t = Table(title="Los Faroleros", show_lines=False)
     for col in ("Creature", "Stands for", "Category", "Autonomy", "Reach", "Control", "Startup"):
         t.add_column(col, style="bold yellow" if col.lower() == highlight else None)
     for c in creatures.values():

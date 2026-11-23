@@ -9,7 +9,7 @@
 #   startup:   cost to get started on a laptop (0 = a text file, 5 = a cluster)
 
 - id: mender
-  name: Mender
+  name: Chambero
   animal: mechanic raccoon
   project: goose
   category: AGENT
@@ -28,7 +28,7 @@
   source: https://goose-docs.ai
 
 - id: octoplug
-  name: Octoplug
+  name: Chaka
   animal: octopus with plugs
   project: Model Context Protocol (MCP)
   category: PROTOCOL
@@ -66,7 +66,7 @@
   source: https://aaif.io/blog/a2a-joins-aaif
 
 - id: scribbit
-  name: Scribbit
+  name: DeathNote
   animal: living notebook
   project: AGENTS.md
   category: INSTRUCTION FORMAT
@@ -84,7 +84,7 @@
   source: https://agents.md
 
 - id: satchel
-  name: Satchel
+  name: Navaja Suiza
   animal: backpack with pockets
   project: Agent Skills
   category: INSTRUCTION FORMAT
@@ -103,7 +103,7 @@
   source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
 
 - id: bulwark
-  name: Bulwark
+  name: Rondero
   animal: guardian armadillo
   project: agentgateway
   category: GATEWAY
@@ -122,7 +122,7 @@
   source: https://agentgateway.dev
 
 - id: switchy
-  name: Switchy
+  name: Cobrador
   animal: capybara switch operator
   project: Agent Router
   category: GATEWAY
@@ -137,11 +137,11 @@
     - {name: Divert, does: "Routes a request to a model by rule."}
     - {name: Plan B, does: "Fails over to another provider."}
     - {name: Budget, does: "Applies token quotas per team."}
-  weakness: "Overlaps with Bulwark in this story. aigw run is Linux and macOS only."
+  weakness: "Overlaps with Rondero in this story. aigw run is Linux and macOS only."
   source: https://aaif.io/blog/agent-router-joins-aaif
 
 - id: glyphstone
-  name: Glyphstone
+  name: Duolingo
   animal: stone tablet with many scripts
   project: Open Responses
   category: API SPECIFICATION
@@ -160,7 +160,7 @@
   source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
 
 - id: glasshell
-  name: Glasshell
+  name: Caparazón
   animal: glass-shelled turtle
   project: OpenSandbox
   category: SANDBOX
@@ -179,7 +179,7 @@
   source: https://github.com/opensandbox-group/OpenSandbox
 
 - id: dojolotl
-  name: Dojolotl
+  name: Amauta
   animal: axolotl in a dojo
   project: OpenEnv
   category: TRAINING ENVIRONMENT

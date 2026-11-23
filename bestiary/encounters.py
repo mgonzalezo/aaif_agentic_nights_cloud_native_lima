@@ -1,6 +1,6 @@
 """The encounters, in story order.
 
-Story: the Lamplighters help a dev team fix issue #7 in the toy upstream project
+Story: Los Faroleros help a dev team fix issue #7 in the toy upstream project
 `farolito`: consult information, read the issue, stay safe, follow the upstream
 ritual, fix, test safely, get a second opinion, open the PR.
 """
@@ -95,7 +95,7 @@ def e0_lab(ctx: Ctx) -> None:
     ctx.console.rule("[bold]Encounter 0: The lab")
     ctx.say("Meet the team. Ten creatures, each one stands for one AAIF project.")
     ctx.console.print(team_table(ctx.creatures, highlight="autonomy"))
-    ctx.say("Look at the Autonomy column: only Mender (goose) is above 0.", "bold yellow")
+    ctx.say("Look at the Autonomy column: only Chambero (goose) is above 0.", "bold yellow")
     ctx.say("Only an AGENT decides. Everything else is a protocol, a format, a gateway, a spec, a box or a dojo.")
     rules = Table(title="Category rules")
     rules.add_column("Category")
@@ -268,7 +268,7 @@ def _stream(cmd: list[str], cwd, env, timeout: int, ctx: Ctx) -> tuple[int | Non
 def e5_bug(ctx: Ctx) -> None:
     n = ctx.settings.issue_number()
     encounter_header(ctx, "5", "The bug", "Propose a change", ["mender", "scribbit", "satchel"])
-    ctx.say("Now the only AGENT takes its turn. Scribbit and Satchel are auras it reads from files.")
+    ctx.say("Now the only AGENT takes its turn. DeathNote and Navaja Suiza are auras it reads from files.")
 
     def live():
         goose = shutil.which("goose")
@@ -302,7 +302,7 @@ def e5_bug(ctx: Ctx) -> None:
         workspace.apply_reference_fix()
         ctx.say("For the story to continue, the recorded fix was applied to the working copy.", "yellow")
         ctx.wire("Diff (from the recorded run)", workspace.unified_diff())
-    ctx.say("Myth 1 closed: MCP is not an agent. Only Mender took a turn.", "bold yellow")
+    ctx.say("Myth 1 closed: MCP is not an agent. Only Chambero took a turn.", "bold yellow")
     ctx.pause()
 
 
@@ -347,7 +347,7 @@ def e6_tests(ctx: Ctx) -> None:
         ctx.wire("pytest inside OpenSandbox", out)
 
     def didactic():
-        ctx.wire("What Glasshell does", [
+        ctx.wire("What Caparazón does", [
             "Sandbox.create('bestiary-sandbox:latest')   -> an isolated container",
             "sandbox.files.write_file('/workspace/...')   -> copy the repo in",
             "sandbox.commands.run('python -m pytest -q')  -> run the agent's code inside",
@@ -391,7 +391,7 @@ def e7_review(ctx: Ctx) -> None:
                     ctx.wire("A2A reply: review", part["text"])
                 if "data" in part:
                     ctx.wire("Open Responses output items (from the reviewer's model call)", part["data"].get("open_responses_output"))
-        ctx.say("Glyphstone was here since encounter 2: every model call used /v1/responses.", "bold green")
+        ctx.say("Duolingo was here since encounter 2: every model call used /v1/responses.", "bold green")
 
     ctx.attempt("e7_a2a_review", live)
     ctx.pause()
@@ -496,7 +496,7 @@ def e9_detour(ctx: Ctx) -> None:
     encounter_header(ctx, "9", "Detour (side quest)", "The team grows: many models", ["switchy", "bulwark"])
     ctx.say("Myth 2: do all these projects do the same thing? Both are GATEWAYS, but they guard different doors.")
     compare = Table()
-    for col in ("", "Bulwark (agentgateway)", "Switchy (Agent Router)"):
+    for col in ("", "Rondero (agentgateway)", "Cobrador (Agent Router)"):
         compare.add_column(col)
     compare.add_row("Main door", "Agents to tools and agents (MCP, A2A)", "Apps to models (OpenAI-compatible API)")
     compare.add_row("Guards", "TOOLS: hides delete_branch", "MODELS: routes and fails over")
