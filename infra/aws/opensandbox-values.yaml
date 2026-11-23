@@ -4,6 +4,7 @@
 # Secret opensandbox-api-key (created by bootstrap.sh with a random value).
 # `configToml` replaces the chart's whole default config, so it is the default block with
 # the images switched to the Docker Hub names and the optional batchsandbox template removed.
+# Ingress: the chart renders [ingress] mode = "direct" by itself, so it is not in configToml.
 server:
   replicaCount: 1
   image: {repository: opensandbox/server, tag: release-1.2.1, pullPolicy: IfNotPresent}
@@ -28,5 +29,5 @@ configToml: |
   namespace = "opensandbox"
   workload_provider = "batchsandbox"
   image_pull_policy = "IfNotPresent"
-  [ingress]
-  mode = "direct"
+  # [ingress] is appended by the chart itself (mode = "direct" while server.gateway.enabled is false);
+  # declaring it here too makes the server fail with "Cannot declare ingress twice".
