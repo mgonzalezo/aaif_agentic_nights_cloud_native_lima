@@ -1,0 +1,29 @@
+# The OpenEnv environment for encounter 10 (envs/farolito_env). It runs the toy project's tests
+# in its own container and answers reset/step over HTTP.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openenv-farolito
+  labels: {app: openenv-farolito}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: openenv-farolito}}
+  template:
+    metadata:
+      labels: {app: openenv-farolito}
+    spec:
+      containers:
+      - name: env
+        image: bestiary-openenv:dev
+        imagePullPolicy: IfNotPresent
+        ports: [{containerPort: 8000}]
+        readinessProbe:
+          httpGet: {path: /health, port: 8000}
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata: {name: openenv-farolito}
+spec:
+  selector: {app: openenv-farolito}
+  ports: [{port: 8000, targetPort: 8000}]

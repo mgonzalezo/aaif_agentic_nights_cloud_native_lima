@@ -1,0 +1,102 @@
+# Ollama on the GPU. One GPU = one pod (nvidia.com/gpu is exclusive), so the "main" and
+# "small" models live in the same pod. Three Services select it:
+#   ollama        - the game, goose and the reviewer
+#   ollama-main   - Agent Router backend 1 (encounter 9 breaks this one on purpose)
+#   ollama-small  - Agent Router backend 2 (the failover target)
+# Models come from the ConfigMap bestiary-config (BESTIARY_MODEL, BESTIARY_FAILOVER_MODEL),
+# which bootstrap.sh creates.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 80Gi}}   # k3s local-path storage class (default)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  labels: {app: ollama}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # one GPU and a ReadWriteOnce volume
+  selector: {matchLabels: {app: ollama}}
+  template:
+    metadata:
+      labels: {app: ollama}
+    spec:
+      runtimeClassName: nvidia   # RuntimeClass shipped by k3s when the NVIDIA toolkit is present
+      containers:
+      - name: ollama
+        image: ollama/ollama:0.40.16
+        env:
+        - {name: OLLAMA_KEEP_ALIVE, value: "-1"}          # keep models loaded: no cold start on stage
+        - {name: OLLAMA_MAX_LOADED_MODELS, value: "2"}    # main and failover resident together
+        - {name: OLLAMA_NUM_PARALLEL, value: "1"}
+        - {name: OLLAMA_FLASH_ATTENTION, value: "1"}
+        - {name: OLLAMA_CONTEXT_LENGTH, value: "32768"}   # the default (4096) is too small for goose
+        ports: [{containerPort: 11434}]
+        resources:
+          limits: {nvidia.com/gpu: 1}
+        readinessProbe:
+          httpGet: {path: /api/tags, port: 11434}
+          periodSeconds: 5
+        volumeMounts: [{name: models, mountPath: /root/.ollama}]
+      volumes:
+      - name: models
+        persistentVolumeClaim: {claimName: ollama-models}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: ollama}
+spec:
+  selector: {app: ollama}
+  ports: [{port: 11434, targetPort: 11434}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: ollama-main}
+spec:
+  selector: {app: ollama}
+  ports: [{port: 11434, targetPort: 11434}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: ollama-small}
+spec:
+  selector: {app: ollama}
+  ports: [{port: 11434, targetPort: 11434}]
+---
+# Pulls both models, then loads them so the first request is not a cold start.
+# bootstrap.sh deletes this Job before every apply (a Job's spec is immutable).
+apiVersion: batch/v1
+kind: Job
+metadata: {name: ollama-pull}
+spec:
+  backoffLimit: 30
+  template:
+    metadata:
+      labels: {app: ollama-pull}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: pull
+        image: ollama/ollama:0.40.16
+        env:
+        - {name: OLLAMA_HOST, value: "http://ollama:11434"}
+        - name: MAIN
+          valueFrom: {configMapKeyRef: {name: bestiary-config, key: BESTIARY_MODEL}}
+        - name: SMALL
+          valueFrom: {configMapKeyRef: {name: bestiary-config, key: BESTIARY_FAILOVER_MODEL}}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          until ollama list >/dev/null 2>&1; do sleep 3; done
+          ollama pull "$SMALL"
+          ollama pull "$MAIN"
+          ollama run "$SMALL" "ok" >/dev/null
+          ollama run "$MAIN" "ok" >/dev/null
+          ollama list

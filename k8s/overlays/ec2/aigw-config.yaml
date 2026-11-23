@@ -1,0 +1,131 @@
+# Agent Router (aigw run) standalone config: the same Kubernetes-API objects the controller
+# would read, from a file. Two backends, both Ollama:
+#   priority 0 = ollama-main  (the model the client asks for, unchanged)
+#   priority 1 = ollama-small (modelNameOverride -> the small model)
+# If ollama-main has no endpoints, Envoy retries on priority 1 and the answer comes from the
+# small model. ${VAR:=default} is expanded by aigw at start (FAILOVER_MODEL comes from the
+# ConfigMap bestiary-config; the Deployment sets it).
+# Source of the shapes: examples/aigw/ollama.yaml and the provider-fallback and
+# model-name-virtualization pages of the Agent Router docs (v1.3).
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: aigw-run}
+spec: {controllerName: gateway.envoyproxy.io/gatewayclass-controller}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: aigw-run, namespace: bestiary}
+spec:
+  gatewayClassName: aigw-run
+  listeners: [{name: http, protocol: HTTP, port: 1975}]
+  infrastructure:
+    parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: envoy-ai-gateway}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: envoy-ai-gateway, namespace: bestiary}
+spec:
+  logging: {level: {default: error}}
+  telemetry:
+    accessLog:
+      settings:
+      - matches: ["request.headers['x-ai-eg-model'] != ''"]
+        sinks: [{type: File, file: {path: /dev/stdout}}]
+        format:
+          type: JSON
+          json:
+            gen_ai.request.model: "%REQ(X-AI-EG-MODEL)%"
+            gen_ai.response.model: "%DYNAMIC_METADATA(io.envoy.ai_gateway:response_model)%"
+            gen_ai.provider.name: "%DYNAMIC_METADATA(io.envoy.ai_gateway:backend_name)%"
+            gen_ai.usage.input_tokens: "%DYNAMIC_METADATA(io.envoy.ai_gateway:llm_input_token)%"
+            gen_ai.usage.output_tokens: "%DYNAMIC_METADATA(io.envoy.ai_gateway:llm_output_token)%"
+            request.path: "%REQ(:PATH)%"
+            response_code: "%RESPONSE_CODE%"
+            duration: "%DURATION%"
+            upstream_host: "%UPSTREAM_HOST%"
+            upstream_cluster: "%UPSTREAM_CLUSTER%"
+            x-request-id: "%REQ(X-REQUEST-ID)%"
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: AIGatewayRoute
+metadata: {name: aigw-run, namespace: bestiary}
+spec:
+  parentRefs: [{name: aigw-run, kind: Gateway, group: gateway.networking.k8s.io}]
+  rules:
+  - matches:
+    - headers: [{type: RegularExpression, name: x-ai-eg-model, value: ".*"}]
+    backendRefs:
+    - {name: ollama-main, priority: 0}
+    - {name: ollama-small, priority: 1, modelNameOverride: "${FAILOVER_MODEL:=qwen3.5:4b}"}
+    timeouts: {request: 180s}
+  llmRequestCosts:
+  - {metadataKey: llm_input_token, type: InputToken}
+  - {metadataKey: llm_output_token, type: OutputToken}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata: {name: ollama-main, namespace: bestiary}
+spec: {endpoints: [{fqdn: {hostname: ollama-main.bestiary.svc.cluster.local, port: 11434}}]}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata: {name: ollama-small, namespace: bestiary}
+spec: {endpoints: [{fqdn: {hostname: ollama-small.bestiary.svc.cluster.local, port: 11434}}]}
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: AIServiceBackend
+metadata: {name: ollama-main, namespace: bestiary}
+spec:
+  timeouts: {request: 3m}
+  schema: {name: OpenAI}
+  backendRef: {name: ollama-main, kind: Backend, group: gateway.envoyproxy.io, namespace: bestiary}
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: AIServiceBackend
+metadata: {name: ollama-small, namespace: bestiary}
+spec:
+  timeouts: {request: 3m}
+  schema: {name: OpenAI}
+  backendRef: {name: ollama-small, kind: Backend, group: gateway.envoyproxy.io, namespace: bestiary}
+---
+# Retry on the next priority when the first backend refuses the connection or answers 5xx.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: aigw-run, namespace: bestiary}
+spec:
+  targetRefs:
+  - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: aigw-run}
+  retry:
+    numAttemptsPerPriority: 1
+    numRetries: 3
+    perRetry:
+      backOff: {baseInterval: 100ms, maxInterval: 2s}
+      timeout: 120s
+    retryOn:
+      httpStatusCodes: [500, 502, 503, 504]
+      triggers: [connect-failure, reset, retriable-status-codes]
+---
+# Envoy's default 32 KiB buffer is too small for AI traffic.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata: {name: client-buffer-limit, namespace: bestiary}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: Gateway, name: aigw-run}]
+  connection: {bufferLimit: 50Mi}
+---
+# Ollama ignores the key; the upstream example wires one, so we keep the shape with a dummy.
+apiVersion: v1
+kind: Secret
+metadata: {name: ollama-apikey, namespace: bestiary}
+type: Opaque
+stringData: {apiKey: "${OPENAI_API_KEY}"}
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: BackendSecurityPolicy
+metadata: {name: ollama-apikey, namespace: bestiary}
+spec:
+  targetRefs:
+  - {group: aigateway.envoyproxy.io, kind: AIServiceBackend, name: ollama-main}
+  - {group: aigateway.envoyproxy.io, kind: AIServiceBackend, name: ollama-small}
+  type: APIKey
+  apiKey: {secretRef: {name: ollama-apikey}}

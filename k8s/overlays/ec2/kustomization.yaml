@@ -1,0 +1,32 @@
+# EC2 + k3s + one NVIDIA GPU. Applied by infra/aws/bootstrap.sh:
+#   kubectl apply -k k8s/overlays/ec2
+# Before applying, bootstrap creates the ConfigMap bestiary-config (models, forge settings) and
+# the Secrets github-token and opensandbox-api-key. Nothing secret is in this directory.
+# OpenSandbox is installed with Helm by bootstrap.sh (it needs CRDs and a controller).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bestiary
+resources:
+- ../../base
+- ollama.yaml
+- agent-router.yaml
+- openenv.yaml
+- console.yaml
+configMapGenerator:
+- name: agentgateway-config
+  files:
+  - config.yaml=agentgateway-config.yaml
+- name: aigw-config
+  files:
+  - config.yaml=aigw-config.yaml
+generatorOptions:
+  disableNameSuffixHash: true   # the Deployments reference these by name; restart pods after a change
+patches:
+- target: {kind: Deployment, name: reviewer-a2a}
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom
+      value: [{configMapRef: {name: bestiary-config}}]
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: "http://ollama:11434"

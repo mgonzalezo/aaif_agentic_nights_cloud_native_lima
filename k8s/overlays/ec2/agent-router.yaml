@@ -1,0 +1,43 @@
+# Agent Router, standalone mode (aigw run) as one pod. Chosen over the controller install
+# (Envoy Gateway + AI Gateway charts and CRDs): one Deployment instead of three Helm
+# releases, same API objects and same failover behaviour, nothing extra to break on stage.
+# Cost: no hot reload; change the ConfigMap and restart the pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-router
+  labels: {app: agent-router}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: agent-router}}
+  template:
+    metadata:
+      labels: {app: agent-router}
+    spec:
+      containers:
+      - name: aigw
+        image: docker.io/envoyproxy/ai-gateway-cli:v1.3.0   # image names kept the envoyproxy/ai-gateway-* names after the rename
+        args: ["run", "/etc/aigw/config.yaml"]   # ENTRYPOINT is /app; the image already sets AIGW_RUN_ID=0
+        env:
+        - {name: OPENAI_API_KEY, value: "unused"}
+        - name: FAILOVER_MODEL
+          valueFrom: {configMapKeyRef: {name: bestiary-config, key: BESTIARY_FAILOVER_MODEL}}
+        ports:
+        - {name: gateway, containerPort: 1975}
+        - {name: admin, containerPort: 1064}
+        readinessProbe:
+          httpGet: {path: /health, port: 1064}
+          periodSeconds: 5
+        volumeMounts: [{name: cfg, mountPath: /etc/aigw}]
+      volumes:
+      - name: cfg
+        configMap: {name: aigw-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: agent-router}
+spec:
+  selector: {app: agent-router}
+  ports:
+  - {name: gateway, port: 1975, targetPort: 1975}
+  - {name: admin, port: 1064, targetPort: 1064}

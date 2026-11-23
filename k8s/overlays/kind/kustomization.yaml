@@ -1,0 +1,36 @@
+# kind on a laptop (no GPU): forge MCP and agentgateway as Deployments, Ollama stays on the host.
+# Create the cluster and apply with: uv run bestiary k8s up
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bestiary
+resources:
+- ../../base
+- forge-mcp.yaml
+- agentgateway.yaml
+configMapGenerator:
+- name: agentgateway-config
+  files:
+  - config.yaml=agentgateway-config.yaml
+images:
+- name: cr.agentgateway.dev/agentgateway
+  newTag: latest   # pin this to the version you rehearsed with
+patches:
+- target: {kind: Deployment, name: reviewer-a2a}
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: "http://host.docker.internal:11434"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/1/value
+      value: "http://localhost:30999/"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value: {name: BESTIARY_MODEL, value: "qwen3.5:9b"}
+- target: {kind: Service, name: reviewer-a2a}
+  patch: |-
+    - op: add
+      path: /spec/type
+      value: NodePort
+    - op: add
+      path: /spec/ports/0/nodePort
+      value: 30999

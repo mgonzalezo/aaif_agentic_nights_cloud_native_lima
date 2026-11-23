@@ -1,0 +1,17 @@
+# Same allow-list as gateway/agentgateway.yaml and the kind overlay. Here agentgateway is a
+# sidecar of the console pod, so the forge MCP server is on localhost.
+# Uses the documented-as-deprecated-but-working "mcp:" form (agentgateway v1.7).
+mcp:
+  port: 3000
+  policies:
+    mcpAuthorization:
+      rules:
+      - 'mcp.tool.name == "list_issues"'
+      - 'mcp.tool.name == "read_issue"'
+      - 'mcp.tool.name == "read_file"'
+      - 'mcp.tool.name == "create_branch"'
+      - 'mcp.tool.name == "create_pull_request"'
+  targets:
+  - name: forge
+    mcp:
+      host: http://127.0.0.1:8765/mcp

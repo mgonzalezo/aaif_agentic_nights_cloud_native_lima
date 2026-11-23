@@ -1,0 +1,116 @@
+# The console pod: where the game runs. Three containers share one network namespace and
+# one emptyDir (/state), so the game, the forge MCP server and goose all see the SAME
+# working copy of the toy project:
+#   console       - the game (bestiary), goose, uv, kubectl. The presenter runs it with
+#                   kubectl exec -it (infra/aws/present.ps1).
+#   forge         - the forge MCP server on 127.0.0.1:8765 (a GitHub-backed forge in the demo)
+#   agentgateway  - sidecar on :3000, the allow-list in front of forge
+# The game reaches the gateway at http://localhost:3000/mcp.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: console}
+---
+# Read-only view of this namespace (kubectl get pods, logs), plus one write: encounter 9 patches
+# the selector of the Service ollama-main to simulate an outage, then restores it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: console-read}
+rules:
+- apiGroups: [""]
+  resources: [pods, pods/log, services, endpoints, events]
+  verbs: [get, list, watch]
+- apiGroups: [apps, batch]
+  resources: [deployments, replicasets, jobs]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: console-break-ollama-main}
+rules:
+- apiGroups: [""]
+  resources: [services]
+  resourceNames: [ollama-main]
+  verbs: [patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: console-read}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: console-read}
+subjects: [{kind: ServiceAccount, name: console}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: console-break-ollama-main}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: console-break-ollama-main}
+subjects: [{kind: ServiceAccount, name: console}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console
+  labels: {app: console}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: console}}
+  template:
+    metadata:
+      labels: {app: console}
+    spec:
+      serviceAccountName: console
+      securityContext: {runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      containers:
+      - name: console
+        image: bestiary-console:dev
+        imagePullPolicy: IfNotPresent
+        command: ["sleep", "infinity"]
+        workingDir: /app
+        env: &env
+        - {name: BESTIARY_PROFILE, value: cloud}
+        - {name: BESTIARY_STATE_DIR, value: /state}
+        - {name: BESTIARY_SANDBOX_IMAGE, value: "bestiary-sandbox:1"}
+        - {name: HOME, value: /home/bestiary}
+        - name: POD_NAME
+          valueFrom: {fieldRef: {fieldPath: metadata.name}}
+        - name: POD_NAMESPACE
+          valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+        - name: NODE_NAME
+          valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+        - name: GITHUB_TOKEN              # created by bootstrap.sh from SSM Parameter Store
+          valueFrom: {secretKeyRef: {name: github-token, key: token, optional: true}}
+        - name: OPEN_SANDBOX_API_KEY      # created by bootstrap.sh (random)
+          valueFrom: {secretKeyRef: {name: opensandbox-api-key, key: api-key, optional: true}}
+        envFrom:
+        - configMapRef: {name: bestiary-config}
+        volumeMounts: &mounts
+        - {name: state, mountPath: /state}
+        resources:
+          requests: {cpu: 250m, memory: 512Mi}
+      - name: forge
+        image: bestiary-console:dev
+        imagePullPolicy: IfNotPresent
+        command: ["python", "-m", "bestiary.services.forge_mcp", "--host", "127.0.0.1", "--port", "8765"]
+        workingDir: /app
+        env: *env
+        envFrom:
+        - configMapRef: {name: bestiary-config}
+        volumeMounts: *mounts
+        readinessProbe:
+          tcpSocket: {port: 8765}
+          periodSeconds: 5
+      - name: agentgateway
+        image: ghcr.io/agentgateway/agentgateway:v1.7.0   # mirror of cr.agentgateway.dev/agentgateway
+        args: ["-f", "/etc/agentgateway/config.yaml"]
+        env:
+        - {name: SESSION_KEY, value: disabled}   # the config is a read-only ConfigMap: no encrypted session ids
+        ports: [{containerPort: 3000}]
+        readinessProbe:
+          tcpSocket: {port: 3000}
+          periodSeconds: 5
+        volumeMounts:
+        - {name: gateway-config, mountPath: /etc/agentgateway}
+      volumes:
+      - name: state
+        emptyDir: {}
+      - name: gateway-config
+        configMap: {name: agentgateway-config}
