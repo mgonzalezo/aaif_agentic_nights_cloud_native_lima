@@ -47,3 +47,12 @@ def fresh_workspace():
     workspace.reset()
     yield workspace
     workspace.reset()
+
+
+@pytest.fixture(autouse=True)
+def isolated_replays(tmp_path, monkeypatch):
+    """In-process tests must not pick up the recordings committed in replays/ (they would turn
+    DIDACTIC fallbacks into REPLAY). Tests that write replays use this empty directory."""
+    import bestiary.engine as engine
+
+    monkeypatch.setattr(engine, "REPLAY_DIR", tmp_path / "replays")
