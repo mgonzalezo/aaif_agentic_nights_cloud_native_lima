@@ -1,0 +1,324 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  DEMO ONLY - Agentic Bestiary single GPU host (EC2 + k3s). Throwaway stack:
+  no inbound ports, access via SSM Session Manager only. Auto-stops after
+  AutoStopHours; delete the stack (infra/aws/teardown.ps1) right after the talk.
+
+Metadata:
+  DemoOnly: "Not for production. Delete the whole stack after the talk."
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Host }
+        Parameters: [InstanceType, AutoStopHours, RootVolumeGiB, AmiParameter, VpcId, SubnetId]
+      - Label: { default: Bootstrap }
+        Parameters: [RepoUrl, RepoRef, ModelTag, FailoverModelTag, GitHubTokenParameterName, GitHubDemoRepo, GitHubDemoIssue]
+      - Label: { default: Cost guard }
+        Parameters: [BudgetLimitUsd, BudgetEmail, CreateBudget]
+
+# NOTE on CreationPolicy / cfn-signal: deliberately NOT used. Bootstrap (k3s,
+# images, model pull) takes 20+ minutes; a wait condition would time out and
+# roll the stack back, killing a slow-but-healthy model download. CREATE_COMPLETE
+# only means "instance launched". Watch progress with the LogTailCommand output.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: g6e.2xlarge
+    AllowedValues: [g6e.2xlarge, g6e.xlarge, g5.2xlarge, g6.2xlarge]
+    Description: GPU instance type (g6e = 1x L40S 48 GB). Needs G/VT on-demand vCPU quota (L-DB2E81BA).
+  AutoStopHours:
+    Type: Number
+    Default: 8
+    MinValue: 1
+    MaxValue: 72
+    Description: >-
+      Hours after each boot until the OS powers itself off (systemd timer ->
+      poweroff -> EC2 STOPS the instance because InstanceInitiatedShutdownBehavior=stop).
+      A stopped instance still bills for the EBS volume; only stack deletion stops all cost.
+  ModelTag:
+    Type: String
+    Default: "qwen3.5:35b"
+    AllowedPattern: '^[A-Za-z0-9._:/-]{1,100}$'
+    Description: Primary model tag handed to bootstrap as BESTIARY_MODEL (placeholder; set the final value).
+  FailoverModelTag:
+    Type: String
+    Default: "qwen3.5:4b"
+    AllowedPattern: '^[A-Za-z0-9._:/-]{1,100}$'
+    Description: Small failover model tag handed to bootstrap as BESTIARY_FAILOVER_MODEL.
+  GitHubDemoRepo:
+    Type: String
+    Default: "mgonzalezo/farolito-demo"
+    AllowedPattern: '^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$'
+    Description: owner/name of the demo repo that receives the real pull request in encounter 8.
+  GitHubDemoIssue:
+    Type: String
+    Default: ""
+    AllowedPattern: '^[0-9]{0,9}$'
+    Description: Issue number of the bug in that repo (from `bestiary github-setup`). Empty = local forge, no real PR.
+  RepoUrl:
+    Type: String
+    Default: https://github.com/mgonzalezo/aaif_agentic_nights_cloud_native_lima
+    AllowedPattern: '^https://[A-Za-z0-9._/-]{1,200}$'
+    Description: HTTPS URL of the (private) repository to clone into /opt/bestiary.
+  RepoRef:
+    Type: String
+    Default: main
+    AllowedPattern: '^[A-Za-z0-9._/-]{1,100}$'
+    Description: Branch, tag or commit to check out.
+  GitHubTokenParameterName:
+    Type: String
+    Default: /bestiary/github-token
+    AllowedPattern: '^/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$'
+    Description: >-
+      Name of an existing SSM SecureString (default aws/ssm key) holding a read-only
+      fine-grained GitHub token. Created by you out-of-band (put-github-token.ps1). Never put the value here.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC (deploy script picks the default VPC).
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet in an AZ that offers the instance type (deploy script picks it).
+  AmiParameter:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id
+    Description: Public SSM parameter resolving to the Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 24.04).
+  RootVolumeGiB:
+    Type: Number
+    Default: 200
+    MinValue: 100
+    MaxValue: 1000
+    Description: Root gp3 volume size (AMI snapshot is 75 GiB; models and images need room).
+  BudgetLimitUsd:
+    Type: Number
+    Default: 300
+    MinValue: 1
+    Description: Monthly account-wide cost budget (USD) used for the e-mail alerts. Not a hard cap.
+  BudgetEmail:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: E-mail receiving AWS Budgets alerts (50/80/100 percent actual, 100 percent forecast).
+  CreateBudget:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Set to false if the deploying principal lacks budgets:* permissions.
+
+Conditions:
+  WantBudget: !Equals [!Ref CreateBudget, "true"]
+
+Resources:
+  HostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bestiary demo host - no inbound rules, all outbound
+      VpcId: !Ref VpcId
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+          Description: All outbound (SSM, GitHub, model registries)
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-sg" }
+        - { Key: Project, Value: bestiary-demo }
+
+  HostRole:
+    Type: AWS::IAM::Role   # unnamed on purpose: CAPABILITY_IAM is enough (no CAPABILITY_NAMED_IAM)
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Policies:
+        - PolicyName: read-github-token-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadOneParameter
+                Effect: Allow
+                Action: ssm:GetParameter
+                # Hierarchical name starting with "/" -> ARN is parameter + name (no double slash).
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GitHubTokenParameterName}"
+              - Sid: DecryptViaSsmOnly
+                Effect: Allow
+                Action: kms:Decrypt
+                # The AWS managed key aws/ssm has an ID unknown at template time, so key/* is
+                # scoped by kms:ViaService: usable only when SSM calls KMS on our behalf.
+                # The aws/ssm key policy already allows account principals via ssm.<region>.
+                Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                Condition:
+                  StringEquals:
+                    "kms:ViaService": !Sub "ssm.${AWS::Region}.amazonaws.com"
+      Tags:
+        - { Key: Project, Value: bestiary-demo }
+
+  HostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref HostRole]
+
+  HostInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiParameter
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref HostInstanceProfile
+      # OS-level shutdown (the auto-stop timer) STOPS the instance; it does not terminate it.
+      InstanceInitiatedShutdownBehavior: stop
+      DisableApiTermination: false
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          SubnetId: !Ref SubnetId
+          AssociatePublicIpAddress: true   # public IP only so SSM works without NAT; SG has no inbound
+          GroupSet: [!Ref HostSecurityGroup]
+          DeleteOnTermination: true
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required            # IMDSv2 only
+        # Hop limit 2: a container/pod behind the k3s CNI bridge is one extra hop from the host;
+        # with 1 the pod's IMDSv2 PUT response is dropped. Trade-off: pods can reach the instance
+        # role (which can read the GitHub token parameter). Acceptable for a throwaway demo.
+        HttpPutResponseHopLimit: 1
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1          # root device name of the Ubuntu DLAMI
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref RootVolumeGiB
+            Encrypted: true              # default aws/ebs key
+            DeleteOnTermination: true
+      PropagateTagsToVolumeOnCreation: true
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-host" }
+        - { Key: Project, Value: bestiary-demo }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Demo-only bootstrap shim. No secrets here; no set -x (would leak the token).
+          set -euo pipefail
+          export HOME=/root
+          export AWS_DEFAULT_REGION='${AWS::Region}'
+          LOG=/var/log/bestiary-bootstrap.log
+          install -m 0644 /dev/null "$LOG"
+
+          # Non-secret settings, kept so bootstrap can be re-run by hand:
+          #   sudo bash -c 'set -a; . /etc/bestiary.env; bash /opt/bestiary/infra/aws/bootstrap.sh'
+          cat >/etc/bestiary.env <<'EOF'
+          BESTIARY_MODEL=${ModelTag}
+          BESTIARY_FAILOVER_MODEL=${FailoverModelTag}
+          GITHUB_TOKEN_PARAM=${GitHubTokenParameterName}
+          AWS_REGION=${AWS::Region}
+          REPO_URL=${RepoUrl}
+          REPO_REF=${RepoRef}
+          BESTIARY_GITHUB_REPO=${GitHubDemoRepo}
+          BESTIARY_GITHUB_ISSUE=${GitHubDemoIssue}
+          EOF
+          chmod 0644 /etc/bestiary.env
+
+          # Auto-stop first, so it is armed even if bootstrap fails or hangs. A systemd timer
+          # (not a one-off "shutdown -h +N") because user data only runs on FIRST boot: the timer
+          # re-arms after every stop/start. poweroff + InstanceInitiatedShutdownBehavior=stop = STOP.
+          cat >/etc/systemd/system/bestiary-autostop.service <<'EOF'
+          [Unit]
+          Description=Bestiary demo auto-stop (OS poweroff -> EC2 stop)
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/systemctl poweroff
+          EOF
+          cat >/etc/systemd/system/bestiary-autostop.timer <<'EOF'
+          [Unit]
+          Description=Bestiary demo auto-stop timer
+          [Timer]
+          OnBootSec=${AutoStopHours}h
+          [Install]
+          WantedBy=timers.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable --now bestiary-autostop.timer
+
+          # Tooling the AMI normally has; install only if missing.
+          command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git; }
+          command -v aws >/dev/null || snap install aws-cli --classic
+          [ -n "$(systemctl list-unit-files --no-legend 'amazon-ssm-agent*' 'snap.amazon-ssm-agent*')" ] \
+            || snap install amazon-ssm-agent --classic
+
+          # Read the token into a shell variable only (never echoed, never on a command line).
+          TOKEN=""
+          for i in 1 2 3 4 5 6; do
+            TOKEN="$(aws ssm get-parameter --name '${GitHubTokenParameterName}' --with-decryption \
+              --query Parameter.Value --output text 2>/dev/null)" && [ -n "$TOKEN" ] && break
+            TOKEN=""; sleep 10
+          done
+          [ -n "$TOKEN" ] || { echo "cannot read SSM parameter ${GitHubTokenParameterName}" >&2; exit 1; }
+
+          # Clone via GIT_ASKPASS: token travels only in the environment of the git process
+          # (not argv, not .git/config, not logs). Username is arbitrary for fine-grained PATs.
+          ASKPASS=/run/bestiary-askpass.sh
+          ( umask 077
+            cat >"$ASKPASS" <<'EOF'
+          #!/bin/sh
+          case "$1" in Username*) echo x-access-token ;; *) printf '%s\n' "$BESTIARY_GIT_TOKEN" ;; esac
+          EOF
+            chmod 700 "$ASKPASS" )
+          rm -rf /opt/bestiary
+          GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$ASKPASS" BESTIARY_GIT_TOKEN="$TOKEN" \
+            git -c credential.helper= clone --quiet '${RepoUrl}' /opt/bestiary
+          rm -f "$ASKPASS"; unset TOKEN
+          git -C /opt/bestiary checkout --quiet '${RepoRef}'
+
+          # Bootstrap is idempotent and logs itself too; 20+ minutes. No cfn-signal on purpose.
+          echo "[$(date -u +%FT%TZ)] starting bootstrap" >>"$LOG"
+          set -a; . /etc/bestiary.env; set +a
+          # bootstrap.sh tees its own output into $LOG; its stdout also lands in cloud-init-output.log.
+          bash /opt/bestiary/infra/aws/bootstrap.sh && echo "[$(date -u +%FT%TZ)] bootstrap finished" >>"$LOG"             || echo "[$(date -u +%FT%TZ)] bootstrap FAILED, see above; re-run it with the command in /etc/bestiary.env's header" >>"$LOG"
+
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Condition: WantBudget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-credits-cap"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitUsd
+          Unit: USD
+        # Whole account, no tag filter: a Project tag filter only works after the tag is
+        # activated as a cost-allocation tag (up to ~24 h, not retroactive) - useless for a one-day demo.
+        # IncludeCredit false: measure gross usage, otherwise credits would hide the spend.
+        CostTypes:
+          IncludeCredit: false
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 50, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 80, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref BudgetEmail }]
+
+Outputs:
+  InstanceId:
+    Value: !Ref HostInstance
+  AvailabilityZone:
+    Value: !GetAtt HostInstance.AvailabilityZone
+  SsmSessionCommand:
+    Description: Plain host shell over SSM (needs session-manager-plugin)
+    Value: !Sub "aws ssm start-session --target ${HostInstance} --region ${AWS::Region}"
+  PresentCommand:
+    Description: Open the game in the console pod (run from the repo root)
+    Value: !Sub "powershell infra\\aws\\present.ps1 -InstanceId ${HostInstance} -Region ${AWS::Region}"
+  LogTailCommand:
+    Description: Follow bootstrap progress (Ctrl+C to leave; nothing is stopped)
+    Value: !Sub "powershell infra\\aws\\present.ps1 -InstanceId ${HostInstance} -Region ${AWS::Region} -Logs"
+  TeardownCommand:
+    Description: DELETE EVERYTHING after the talk
+    Value: !Sub "powershell infra\\aws\\teardown.ps1 -StackName ${AWS::StackName} -Region ${AWS::Region}"
+  BudgetName:
+    Condition: WantBudget
+    Value: !Ref CostBudget
+  AutoStopHoursAfterBoot:
+    Value: !Ref AutoStopHours

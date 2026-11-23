@@ -1,0 +1,32 @@
+# Helm values for the OpenSandbox server chart (manifests/charts/server, tag release-1.2.1),
+# Kubernetes runtime, no ingress gateway (sandbox pods are reached on their pod IPs, which
+# works from a pod in the same cluster). No secrets here: the API key comes from the
+# Secret opensandbox-api-key (created by bootstrap.sh with a random value).
+# `configToml` replaces the chart's whole default config, so it is the default block with
+# the images switched to the Docker Hub names and the optional batchsandbox template removed.
+server:
+  replicaCount: 1
+  image: {repository: opensandbox/server, tag: release-1.2.1, pullPolicy: IfNotPresent}
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 2Gi}
+  env:
+  - name: OPENSANDBOX_SERVER_API_KEY
+    valueFrom: {secretKeyRef: {name: opensandbox-api-key, key: api-key}}
+configToml: |
+  [server]
+  host = "0.0.0.0"
+  port = 80
+  api_key = ""
+  [log]
+  level = "INFO"
+  [runtime]
+  type = "kubernetes"
+  execd_image = "opensandbox/execd:release-1.2.1"
+  [kubernetes]
+  kubeconfig_path = ""
+  namespace = "opensandbox"
+  workload_provider = "batchsandbox"
+  image_pull_policy = "IfNotPresent"
+  [ingress]
+  mode = "direct"
