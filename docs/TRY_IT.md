@@ -92,8 +92,8 @@ says where it runs (pod and node). Expected badges (measured in three full rehea
 | 2 | MCP with no model, then the agent loop | LIVE | 1 s, 3 s |
 | 3 | agentgateway hides `delete_branch`, rejects a direct call | LIVE | error -32602 "unknown resource" |
 | 4 | Agent Skills token meter | LIVE | instant |
-| 5 | goose fixes the bug | **REPLAY** | gate 14/20 (need 18). Live it passed in 1 of 3 rehearsals (44 s) and hit the 75 s cap in 2; the recorded run is a real one |
-| 6 | pytest in OpenSandbox (one sandbox pod per run) | LIVE | 2 to 5 s |
+| 5 | goose fixes the bug | LIVE or **REPLAY** | Live it must also pass the tests (since commit b945c2c): gate 14/20, and 1 of 3 attempts in the last recording. If it does not, the step falls back to a real recorded run and says so |
+| 6 | pytest in OpenSandbox (one sandbox pod per run) | LIVE | 2 to 5 s, `2 passed` |
 | 7 | A2A review over Open Responses | LIVE | about 4 s |
 | 8 | PR through the gateway | LIVE (local forge) | instant. A real GitHub PR is optional, see section 6 |
 | 9 | Agent Router failover (35b to 4b) | LIVE | about 15 s. The outage is **simulated** |
