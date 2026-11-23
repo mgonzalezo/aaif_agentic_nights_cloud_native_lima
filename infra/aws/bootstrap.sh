@@ -109,6 +109,8 @@ if [[ "$BESTIARY_ACCELERATOR" == "gpu" ]]; then
   grep -q nvidia /var/lib/rancher/k3s/agent/etc/containerd/config.toml || die "k3s containerd config has no nvidia runtime"
   retry 30 5 kc get runtimeclass nvidia >/dev/null 2>&1 || die "RuntimeClass nvidia missing"
 fi
+node_listed() { [[ -n "$(kc get nodes --no-headers 2>/dev/null)" ]]; }
+retry 60 5 node_listed || die "k3s node never registered"   # kubectl wait fails at once if no node exists yet
 kc wait --for=condition=Ready node --all --timeout=180s
 echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' > /etc/profile.d/k3s.sh
 
