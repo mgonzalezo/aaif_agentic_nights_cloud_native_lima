@@ -224,6 +224,7 @@ def test_encounter_9_shows_failover_and_always_restores_the_service(monkeypatch)
         return ""
 
     monkeypatch.setattr(encounters, "_kube", fake_kube)
+    monkeypatch.setattr(encounters.time, "sleep", lambda s: None)
     port = free_port()
     server = serve(_fake_router_app(state), port)
     try:
@@ -235,6 +236,29 @@ def test_encounter_9_shows_failover_and_always_restores_the_service(monkeypatch)
         assert "LIVE" in out
         assert "I am qwen3.5:35b." in out and "I am qwen3.5:4b." in out
         assert patches == ["ollama-off", "ollama"]  # outage, then restored
+    finally:
+        server.should_exit = True
+
+
+def test_encounter_9_never_claims_a_failover_that_did_not_happen(monkeypatch):
+    from bestiary import encounters
+    from conftest import free_port, serve
+
+    state = {"down": False, "small": "qwen3.5:35b"}  # the router keeps answering from the main model
+
+    monkeypatch.setattr(encounters, "_kube", lambda args: "")
+    monkeypatch.setattr(encounters.time, "sleep", lambda s: None)
+    port = free_port()
+    server = serve(_fake_router_app(state), port)
+    try:
+        buf = io.StringIO()
+        ctx = _auto_ctx(buf, monkeypatch, BESTIARY_PROFILE="cloud", BESTIARY_AGENT_ROUTER_URL=f"http://127.0.0.1:{port}",
+                        BESTIARY_MODEL="qwen3.5:35b")
+        encounters.e9_detour(ctx)
+        out = buf.getvalue()
+        assert "no failover observed" in out
+        assert "Failover: asked for" not in out
+        assert "DIDACTIC" in out  # falls back, and says so
     finally:
         server.should_exit = True
 
@@ -268,3 +292,23 @@ def test_the_model_pod_says_whether_it_runs_on_gpu_or_cpu(monkeypatch):
     assert where.describe("glyphstone").endswith("(GPU)")
     monkeypatch.setenv("BESTIARY_ACCELERATOR", "cpu")
     assert Where(settings=Settings(), kubectl=_fake_kubectl([])).describe("glyphstone").endswith("(CPU)")
+
+
+def test_a_gateway_rejection_is_shown_as_evidence_not_as_a_crash():
+    import asyncio
+
+    from bestiary import encounters
+
+    class Rejected(Exception):
+        error = type("E", (), {"code": -32602})()
+
+    async def boom(url, name, args):
+        raise BaseExceptionGroup("unhandled errors in a TaskGroup", [ExceptionGroup("inner", [Rejected("unknown resource")])])
+
+    original = encounters._mcp_call
+    encounters._mcp_call = boom
+    try:
+        answer = asyncio.run(encounters._mcp_call_or_error("http://x/mcp", "delete_branch", {"name": "main"}))
+    finally:
+        encounters._mcp_call = original
+    assert answer == {"rejected": True, "error": {"code": -32602, "message": "unknown resource"}}

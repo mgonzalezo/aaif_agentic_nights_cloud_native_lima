@@ -52,6 +52,26 @@ async def _mcp_call(url: str, name: str, args: dict) -> tuple[bool, str]:
         return r.is_error, "\n".join(getattr(x, "text", "") for x in r.content)
 
 
+def _leaf_errors(err: BaseException):
+    """The innermost exceptions of (possibly nested) exception groups raised by the MCP client."""
+    if isinstance(err, BaseExceptionGroup):
+        for sub in err.exceptions:
+            yield from _leaf_errors(sub)
+    else:
+        yield err
+
+
+async def _mcp_call_or_error(url: str, name: str, args: dict) -> dict:
+    """tools/call that returns what the server (or a gateway in front of it) answered, even a rejection."""
+    try:
+        is_error, text = await _mcp_call(url, name, args)
+        return {"rejected": False, "is_error": is_error, "result": text}
+    except BaseException as err:  # the MCP client raises exception groups for a JSON-RPC error
+        leaf = next(_leaf_errors(err))
+        code = getattr(getattr(leaf, "error", None), "code", getattr(leaf, "code", None))
+        return {"rejected": True, "error": {"code": code, "message": str(leaf)}}
+
+
 def _replay_only(reason: str):
     def step():
         raise Fallback(reason)
@@ -162,8 +182,12 @@ def e3_injection(ctx: Ctx) -> None:
             ctx.say("delete_branch is still visible: check the mcpAuthorization rules.", "red")
         else:
             ctx.say("delete_branch disappeared. The model cannot call what it never sees.", "bold green")
-        err, out = _run(_mcp_call(ctx.settings.gateway_url, "delete_branch", {"name": "main"}))
-        ctx.wire("The game (not the model) calls delete_branch through the gateway anyway", {"is_error": err, "result": out})
+        answer = _run(_mcp_call_or_error(ctx.settings.gateway_url, "delete_branch", {"name": "main"}))
+        ctx.wire("The game (not the model) calls delete_branch through the gateway anyway", answer)
+        if answer["rejected"] or answer.get("is_error"):
+            ctx.say("The gateway rejected the direct call too.", "bold green")
+        else:
+            ctx.say("The gateway let the direct call through: check the mcpAuthorization rules.", "red")
 
     def didactic():
         ctx.wire("tools/list WITHOUT the gateway", ["list_issues", "read_issue", "read_file", "create_branch", "create_pull_request", "delete_branch"])
@@ -475,7 +499,8 @@ def e9_detour(ctx: Ctx) -> None:
             raise Fallback("Agent Router runs in the cluster (BESTIARY_PROFILE=cloud)")
         ns, svc = ctx.settings.namespace, "ollama-main"
         ctx.wire("Step 1: request through Agent Router, main model", {"POST": f"{ctx.settings.agent_router_url}/v1/responses", "model": main_model})
-        ctx.wire("Response", _router_call(ctx, main_model))
+        first = _router_call(ctx, main_model)
+        ctx.wire("Response", first)
         _router_log(ctx)
         ctx.say(f"Step 2: simulate an outage. Service {svc} loses its endpoints (one GPU, one Ollama pod: a simulated failure).", "yellow")
 
@@ -483,14 +508,20 @@ def e9_detour(ctx: Ctx) -> None:
             return _kube(["-n", ns, "patch", "svc", svc, "--type", "merge", "-p", json.dumps({"spec": {"selector": {"app": selector}}})])
 
         patch("ollama-off")
+        time.sleep(3)  # let the router drop its idle connection to the old endpoint
         try:
             ctx.wire("Same request, main backend down", {"model": main_model})
-            ctx.wire("Response", _router_call(ctx, main_model))
+            second = _router_call(ctx, main_model)
+            ctx.wire("Response", second)
             _router_log(ctx)
         finally:
             patch("ollama")
             ctx.say(f"Service {svc} restored.", "dim")
-        ctx.say(f"Failover: asked for {main_model}, answered by {small_model}. The app never changed its URL.", "bold green")
+        served = second.get("served_by_model")
+        if not served or served == first.get("served_by_model"):
+            # Never claim a failover that did not happen: this live step does not count (no replay is recorded).
+            raise Fallback(f"no failover observed: the router answered with {served} both times")
+        ctx.say(f"Failover: asked for {main_model}, answered by {served}. The app never changed its URL.", "bold green")
 
     def didactic():
         cfg = (REPO_ROOT / "agent-router" / "README.md").read_text(encoding="utf-8")
