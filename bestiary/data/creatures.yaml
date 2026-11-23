@@ -85,7 +85,7 @@
 
 - id: satchel
   name: Navaja Suiza
-  animal: backpack with pockets
+  animal: Swiss-army multi-tool
   project: Agent Skills
   category: INSTRUCTION FORMAT
   joined_aaif: "2026-10-22"
@@ -142,7 +142,7 @@
 
 - id: glyphstone
   name: Duolingo
-  animal: stone tablet with many scripts
+  animal: macaw that repeats every language
   project: Open Responses
   category: API SPECIFICATION
   joined_aaif: "2026-10-22"
