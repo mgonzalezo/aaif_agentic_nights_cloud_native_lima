@@ -95,8 +95,9 @@ spec:
         envFrom:
         - configMapRef: {name: bestiary-config}
         volumeMounts: *mounts
-        readinessProbe:
-          tcpSocket: {port: 8765}
+        readinessProbe:   # forge listens on 127.0.0.1 only: probe from inside the container (a tcpSocket probe uses the pod IP)
+          exec:
+            command: ["python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8765), 2).close()"]
           periodSeconds: 5
       - name: agentgateway
         image: ghcr.io/agentgateway/agentgateway:v1.7.0   # mirror of cr.agentgateway.dev/agentgateway
