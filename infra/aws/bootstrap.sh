@@ -210,7 +210,9 @@ OS_DIR=/opt/OpenSandbox
 if [[ ! -d "$OS_DIR/.git" ]]; then
   git clone --quiet --depth 1 --branch "$OPENSANDBOX_TAG" https://github.com/opensandbox-group/OpenSandbox.git "$OS_DIR"
 fi
-helm upgrade -i opensandbox-base "$OS_DIR/manifests/charts/base" >/dev/null
+# The chart can create opensandbox-system itself but cannot adopt one that already exists (this script
+# pre-creates it for the API key Secret), and the fast-sandbox dataplane namespace is not used here.
+helm upgrade -i opensandbox-base "$OS_DIR/manifests/charts/base" \n  --set fastSandbox.namespaces.createSystem=false --set fastSandbox.namespaces.create=false >/dev/null
 helm upgrade -i opensandbox-controller "$OS_DIR/manifests/charts/controller" -n opensandbox-system \
   --set controller.image.repository=opensandbox/controller --set controller.image.tag="${OPENSANDBOX_TAG}" >/dev/null
 helm upgrade -i opensandbox-server "$OS_DIR/manifests/charts/server" -n opensandbox-system \
