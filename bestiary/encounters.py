@@ -92,6 +92,11 @@ def _gateway_up(ctx: Ctx) -> bool:
 
 # --------------------------------------------------------------------------- 0
 def e0_lab(ctx: Ctx) -> None:
+    if ctx.settings.ui == "battle":
+        from bestiary import battle
+
+        if battle.enabled(ctx):
+            battle.title_screen(ctx)
     ctx.console.rule("[bold]Encounter 0: The lab")
     ctx.say("Meet the team. Ten creatures, each one stands for one AAIF project.")
     ctx.console.print(team_table(ctx.creatures, highlight="autonomy"))
@@ -607,7 +612,13 @@ GPU_COLUMNS = (
 
 
 def ek_kubernetes(ctx: Ctx) -> None:
-    ctx.console.rule("[bold]Region: Kubernetes")
+    ctx.current_number = "K8s"
+    from bestiary import battle
+
+    if battle.enabled(ctx):
+        battle.intro(ctx, "K8s", "Kubernetes region", "Share it with many teams", ["bulwark"])
+    else:
+        ctx.console.rule("[bold]Region: Kubernetes")
     cloud = ctx.settings.is_cloud
     ns = ctx.settings.namespace
     if cloud:

@@ -234,8 +234,13 @@ def _grid(sprite_id: str) -> list[str]:
 
 
 def render(sprite_id: str, scale: int = 1) -> Text:
-    """Render a sprite with upper-half blocks: one cell = 1 x 2 pixels."""
-    grid = _grid(sprite_id)
+    """Render a creature sprite with upper-half blocks: one cell = 1 x 2 pixels."""
+    return render_grid(_grid(sprite_id), scale)
+
+
+def render_grid(grid: list[str], scale: int = 1) -> Text:
+    """Render any 16x16 text grid (creatures and battle opponents) with upper-half blocks."""
+    grid = [row.ljust(16, ".")[:16] for row in grid[:16]] + ["." * 16] * (16 - len(grid))
     if scale > 1:
         grid = [("".join(ch * scale for ch in row)) for row in grid for _ in range(scale)]
     out = Text()

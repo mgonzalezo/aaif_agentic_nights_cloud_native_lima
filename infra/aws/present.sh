@@ -17,6 +17,7 @@ while [ $# -gt 0 ]; do
     --shell) MODE=shell; shift ;;
     --host) MODE=host; shift ;;
     --logs) MODE=logs; shift ;;
+    --battle) BATTLE=true; shift ;;
     --dry-run|--whatif) DRY=true; shift ;;
     -h|--help) echo "Usage: $0 [--instance-id i-..] [--stack-name N] [--region R] [--profile P] [--doctor|--shell|--host|--logs] [--dry-run]"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -28,7 +29,7 @@ command -v aws >/dev/null || { echo "aws CLI not found." >&2; exit 1; }
 # /etc/rancher/k3s/k3s.yaml is root-readable, so use `sudo k3s kubectl` (ssm-user has passwordless sudo).
 EXEC='sudo k3s kubectl -n bestiary exec -it deploy/console -c console --'
 case "$MODE" in
-  game) REMOTE="$EXEC bestiary" ;;
+  game) if [ "${BATTLE:-false}" = true ]; then REMOTE="$EXEC bestiary play --ui battle"; else REMOTE="$EXEC bestiary"; fi ;;
   doctor) REMOTE="$EXEC bestiary doctor" ;;
   shell) REMOTE="$EXEC bash" ;;
   logs) REMOTE='sudo tail -n 200 -F /var/log/bestiary-bootstrap.log' ;;

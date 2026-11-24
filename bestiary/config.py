@@ -53,6 +53,7 @@ def _by_profile(laptop: str, cloud: str) -> str:
 class Settings:
     # Model provider: auto | ollama | openai | none
     profile: str = field(default_factory=profile)
+    ui: str = field(default_factory=lambda: _env("BESTIARY_UI", "classic").lower())  # classic | battle
     provider: str = field(default_factory=lambda: _env("BESTIARY_PROVIDER", "auto"))
     ollama_host: str = field(default_factory=lambda: _env("OLLAMA_HOST", _by_profile("http://localhost:11434", "http://ollama:11434")))
     ollama_model: str = field(default_factory=lambda: _env("BESTIARY_MODEL", "qwen3.5:9b"))

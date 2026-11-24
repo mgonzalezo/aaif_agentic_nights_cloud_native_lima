@@ -61,6 +61,7 @@ class Ctx:
     events: list[dict] = field(default_factory=list)
     badge: str = "LIVE"
     where: Where = field(default_factory=Where)
+    current_number: str | None = None  # encounter on screen (the battle UI needs it for the outcome)
     _pending_live: bool = False
 
     def _flush_badge(self) -> None:
@@ -96,11 +97,26 @@ class Ctx:
 
     # ---------- live / replay ----------
     def attempt(self, encounter_id: str, live: Callable[[], Any], didactic: Callable[[], Any] | None = None) -> str:
+        """Run a live step (see _attempt) and, in the battle UI, close it with the outcome of the fight."""
+        status = self._attempt(encounter_id, live, didactic)
+        if self.settings.ui == "battle":
+            from bestiary import battle
+
+            if battle.enabled(self):
+                battle.outcome(self, encounter_id, status, self.current_number)
+        return status
+
+    def _attempt(self, encounter_id: str, live: Callable[[], Any], didactic: Callable[[], Any] | None = None) -> str:
         """Run a live step; on Fallback (or if the presenter presses r) show the replay; else didactic."""
         self.events = []
         choice = "" if self.auto else self.pause("[Enter] run live   [r] show replay   [s] skip")
         if choice == "s":
             return "SKIPPED"
+        if self.settings.ui == "battle":
+            from bestiary import battle
+
+            if battle.enabled(self):
+                battle.move_used(self, encounter_id)
         if not self.replay_only and choice != "r":
             try:
                 self.badge = "LIVE"
@@ -157,6 +173,13 @@ def creature_card(c: dict, scale: int = 1, where: str = "") -> Panel:
 
 
 def encounter_header(ctx: Ctx, number: str, title: str, step: str, creature_ids: list[str]) -> None:
+    ctx.current_number = number
+    if ctx.settings.ui == "battle":
+        from bestiary import battle
+
+        if battle.enabled(ctx):
+            battle.intro(ctx, number, title, step, creature_ids)
+            return
     ctx.console.rule(f"[bold]Encounter {number}: {title}")
     ctx.say(f"Workflow step: {step}", "italic")
     ctx.console.print(Columns([creature_card(ctx.creatures[i], where=ctx.where.describe(i)) for i in creature_ids]))

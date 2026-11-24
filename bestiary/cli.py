@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,8 @@ def _ctx(console: Console, **kw) -> Ctx:
 def cmd_play(args: argparse.Namespace) -> int:
     from bestiary.encounters import ORDER
 
+    if getattr(args, "ui", None):
+        os.environ["BESTIARY_UI"] = args.ui
     console = Console(force_terminal=None if not args.auto else True, width=args.width)
     if not args.no_reset:
         workspace.reset()
@@ -178,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--no-reset", action="store_true", help="keep the current working copy")
         p.add_argument("--width", type=int, default=None)
         p.add_argument("--record", action="store_true", help="save live runs to replays/")
+        p.add_argument("--ui", choices=["classic", "battle"], help="screen style (default classic, or BESTIARY_UI)")
 
     play_args(sub.add_parser("play", help="play the game (default)"))
     play_args(sub.add_parser("record", help="run every encounter live and save replays"))

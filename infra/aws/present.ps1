@@ -19,6 +19,7 @@ param(
   [switch]$Shell,
   [Alias('Host')][switch]$HostShell,   # -Host works; the variable cannot be named $Host (automatic variable)
   [switch]$Logs,
+  [switch]$Battle,   # the Pokemon-style battle screens (feat/battle-ui)
   [switch]$WhatIf
 )
 $ErrorActionPreference = 'Continue'
@@ -31,7 +32,7 @@ if ($HostShell) { $mode = 'host' }
 elseif ($Logs) { $mode = 'logs'; $remote = 'sudo tail -n 200 -F /var/log/bestiary-bootstrap.log' }
 elseif ($Doctor) { $mode = 'doctor'; $remote = "$exec bestiary doctor" }
 elseif ($Shell) { $mode = 'shell'; $remote = "$exec bash" }
-else { $mode = 'game'; $remote = "$exec bestiary" }
+else { $mode = 'game'; $remote = if ($Battle) { "$exec bestiary play --ui battle" } else { "$exec bestiary" } }
 
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) { Say 'aws CLI not found on PATH.' 'Red'; exit 1 }
 
