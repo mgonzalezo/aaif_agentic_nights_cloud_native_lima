@@ -98,7 +98,7 @@ def test_the_menu_says_who_fights_whom(monkeypatch):
 
 def test_keys_decode_arrows_enter_and_escape():
     assert [keys.decode_escape(s) for s in ("[A", "[B", "[C", "[D", "OA", "OD", "[1;5C")] == ["up", "down", "right", "left", "up", "left", "right"]
-    assert keys.decode_escape("") == "esc" and keys.decode_escape("[Z") == ""
+    assert keys.decode_escape("") == "esc" and keys.decode_escape("[99~") == ""
     assert keys.decode_char("\r") == "enter" and keys.decode_char(" ") == "space" and keys.decode_char("R") == "r"
     assert keys.decode_char("\x01") == ""
     with pytest.raises(KeyboardInterrupt):
@@ -165,6 +165,105 @@ def test_scripted_runs_never_wait_for_keys(monkeypatch):
     assert not battle.interactive(ctx)
     assert ctx.attempt("e1_doubt", lambda: ctx.say("x")) == "LIVE"
     ctx.pause()
+
+
+# ---------------------------------------------------------------- terminals that send arrows differently
+
+def feed(text):
+    """read_escape() reads one character at a time; None means nothing else arrived in time."""
+    it = iter(text)
+    return lambda: next(it, None)
+
+
+@pytest.mark.parametrize("sent,key", [
+    ("[A", "up"), ("[B", "down"), ("[C", "right"), ("[D", "left"),        # the usual ESC [ A
+    ("OA", "up"), ("OB", "down"), ("OC", "right"), ("OD", "left"),        # application cursor mode: ESC O A
+    ("[1;5C", "right"), ("[1;2A", "up"),                                   # with Ctrl or Shift
+    ("[38;72;0;1;0;1_", "up"), ("[40;80;0;1;0;1_", "down"),               # Windows Terminal win32-input-mode
+    ("[37;75;0;1;0;1_", "left"), ("[39;77;0;1;0;1_", "right"),
+    ("[13;28;13;1;0;1_", "enter"), ("[87;17;119;1;0;1_", "w"),
+    ("[38;72;0;0;0;1_", ""),                                              # the key-up half of the same press: ignored
+    ("[Z", "backtab"), ("", "esc"),
+])
+def test_every_known_way_of_sending_an_arrow_is_understood(sent, key):
+    assert keys.decode_escape(keys.read_escape(feed(sent))) == key
+
+
+def test_an_escape_o_sequence_is_read_whole_and_nothing_is_left_over():
+    rest = iter("OAxyz")
+    assert keys.read_escape(lambda: next(rest, None)) == "OA"
+    assert next(rest) == "x"   # the A was not left behind to be read as a letter
+
+
+def test_an_unknown_sequence_is_reported_not_swallowed():
+    assert keys.decode_escape(keys.read_escape(feed("[99~"))) == ""
+
+
+def test_other_keys_move_the_cursor_too(monkeypatch):
+    ctx, _ = terminal_ctx(monkeypatch)
+    ctx.dex_seen.add("mender")
+    press(monkeypatch, "s", "d", "enter")           # FIGHT -> down (RUN) -> right (stays) ... Enter
+    assert battle.choose(ctx, "e5_goose") == "s"
+    press(monkeypatch, "h", "j", "l", "enter")       # FIGHT -> left (POKEDEX) -> down (REPLAY) -> right (RUN)
+    assert battle.choose(ctx, "e5_goose") == "s"
+    press(monkeypatch, "3", "enter")                 # a digit jumps to that choice
+    assert battle.choose(ctx, "e5_goose") == "r"
+    press(monkeypatch, "tab", "enter")               # Tab goes to the next choice (FIGHT -> REPLAY)
+    assert battle.choose(ctx, "e5_goose") == "r"
+    left = press(monkeypatch, "backtab", "enter", "enter", "enter")   # Shift+Tab -> POKEDEX; Enter opens it, Enter closes, Enter fights
+    assert battle.choose(ctx, "e5_goose") == "" and left == []
+
+
+def test_the_menu_says_when_a_key_was_not_recognised(monkeypatch):
+    ctx, buf = make_ctx(monkeypatch)
+    monkeypatch.setattr(keys, "unknown", "ESC [ 9 9 ~")
+    ctx.console.print(battle.menu_panel(ctx, ctx.creatures["mender"], "5", 0))
+    assert "key not recognised: ESC [ 9 9 ~" in buf.getvalue()
+
+
+def test_the_wait_between_screens_accepts_the_alternatives_too(monkeypatch):
+    ctx, _ = terminal_ctx(monkeypatch)
+    left = press(monkeypatch, "x", "d")
+    ctx.pause()
+    assert left == []
+
+
+# ---------------------------------------------------------------- the enemies explain themselves
+
+def test_every_obstacle_says_what_it_is_and_why_it_is_a_problem():
+    from bestiary.opponents import NAMES
+
+    info = battle.load_obstacles()
+    assert set(info) == set(battle.OPPONENT_OF.values()) == set(NAMES)
+    for oid, entry in info.items():
+        assert set(entry) == {"short", "what", "problem"}, oid
+        assert all(entry[k].strip() for k in entry), oid
+        assert len(entry["short"]) <= 70, oid   # one line in the menu
+
+
+@pytest.mark.parametrize("number", list(battle.OPPONENT_OF))
+def test_the_arena_shows_the_description_of_the_monster(monkeypatch, number):
+    ctx, buf = make_ctx(monkeypatch)
+    encounter_header(ctx, number, "title", "step", ["scribbit"])
+    out = buf.getvalue()
+    entry = battle.obstacle_info(number)
+    flat = " ".join(out.replace("│", " ").split())
+    assert "What it is:" in out and "Why it is a problem:" in out
+    assert " ".join(entry["what"].split()[:6]) in flat and " ".join(entry["problem"].split()[:6]) in flat
+    assert all(cell_len(line) <= 110 for line in out.splitlines())
+
+
+def test_the_menu_repeats_the_monster_in_one_line(monkeypatch):
+    ctx, buf = make_ctx(monkeypatch)
+    ctx.console.print(battle.menu_panel(ctx, ctx.creatures["mender"], "5", 1))
+    assert "BUG: farolito crashes with a traceback" in buf.getvalue()
+
+
+def test_the_card_after_the_fight_stays_compact(monkeypatch):
+    ctx, buf = make_ctx(monkeypatch)
+    ctx.current_number = "1"
+    battle.outcome(ctx, "e1_doubt", "LIVE", "1")
+    assert "FAINTED" in buf.getvalue() and "What it is:" not in buf.getvalue()
 
 
 def test_raw_mode_is_harmless_when_there_is_no_terminal():

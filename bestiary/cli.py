@@ -43,6 +43,23 @@ def cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_keytest(args: argparse.Namespace) -> int:
+    """Press keys and see what the terminal sends. Use it when the arrows of the battle UI do not move the cursor."""
+    from bestiary import keys
+
+    if not keys.stdin_is_tty():
+        print("keytest needs a real terminal (run it with a TTY: kubectl exec -it ...).")
+        return 1
+    print("Press the arrow keys, Enter, Esc, w a s d ...  Each line shows what the game understood and the raw bytes.")
+    print("Press q to stop (or Ctrl-C).\n")
+    with keys.raw_mode():
+        while True:
+            key = keys.read_key()
+            print(f"understood: {key or '(nothing: not recognised)':<26} raw: {keys.last_raw}", flush=True)
+            if key == "q":
+                return 0
+
+
 def _host_port(url: str, default_port: int = 80) -> tuple[str, int]:
     """host and port of 'http://host:port/path' or 'host:port'."""
     hostport = url.split("//", 1)[-1].split("/", 1)[0]
@@ -198,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     gt.add_argument("--runs", type=int, default=50)
     gt.add_argument("--goose", action="store_true", help="also gate goose (slow)")
     gt.add_argument("--only", help="comma list of steps to gate: agent, reviewer, goose (goose implies --goose)")
+    sub.add_parser("keytest", help="show what each key press sends (arrow keys of the battle UI)")
     k = sub.add_parser("k8s", help="create or delete the kind cluster")
     k.add_argument("action", choices=["up", "down"])
 
@@ -206,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(["play", *(argv or sys.argv[1:])])
     handler = {
         "play": cmd_play, "record": cmd_record, "doctor": cmd_doctor, "services": cmd_services,
-        "github-setup": cmd_github_setup, "sprites": cmd_sprites, "k8s": cmd_k8s, "gate": cmd_gate,
+        "github-setup": cmd_github_setup, "sprites": cmd_sprites, "k8s": cmd_k8s, "gate": cmd_gate, "keytest": cmd_keytest,
     }[args.cmd]
     return handler(args) or 0
 

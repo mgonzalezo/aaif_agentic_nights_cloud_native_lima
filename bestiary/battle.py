@@ -11,6 +11,9 @@ The classic screens stay the default.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml
 from rich.align import Align
 from rich.console import Group, RenderableType
 from rich.live import Live
@@ -52,6 +55,18 @@ MOVES = {
     "ek_kubernetes": ("bulwark", 2, "Every pod of the team is in sight."),
 }
 
+OBSTACLES = Path(__file__).parent / "data" / "obstacles.yaml"
+
+
+def load_obstacles() -> dict[str, dict]:
+    """what each obstacle is and why it is a problem (bestiary/data/obstacles.yaml), by opponent id"""
+    return yaml.safe_load(OBSTACLES.read_text(encoding="utf-8"))
+
+
+def obstacle_info(number: str | None) -> dict:
+    return load_obstacles().get(OPPONENT_OF.get(number or "", ""), {})
+
+
 # the action menu, row by row (2 x 2): label, what it returns to the engine, and the hint shown under the cursor
 CHOICES = [
     ("POKÉDEX", "dex", "Read the entry for {project}: what it is, what it is good for, its weakness."),
@@ -60,7 +75,8 @@ CHOICES = [
     ("RUN", "s", "Skip this step."),
 ]
 FIGHT = 1
-LETTERS = {"p": 0, "i": 0, "f": 1, "r": 2, "s": 3}   # old habits still work, but the arrows are the way
+# when a terminal does not send arrows the game understands: W A S D and H J K L move too, 1 to 4 jump to a choice, Tab cycles
+ALIASES = {"w": "up", "k": "up", "s": "down", "j": "down", "a": "left", "h": "left", "d": "right", "l": "right"}
 
 
 def enabled(ctx) -> bool:
@@ -116,10 +132,21 @@ def _box(*lines: RenderableType, width: int, title: str | None = None) -> Panel:
                  title=Text(f" {title} ", style=f"bold {INK}") if title else None, title_align="left")
 
 
-def _opponent_box(name: str, number: str, frac: float, weak_to: str, width: int = 44) -> Panel:
+def _field(label: str, text: str, color: str = INK) -> Text:
+    t = Text(justify="left", overflow="fold")
+    t.append(f"{label} ", style=f"bold {INK}")
+    t.append(text, style=color)
+    return t
+
+
+def _opponent_box(name: str, number: str, frac: float, weak_to: str, width: int = 44, detail: dict | None = None) -> Panel:
+    """The obstacle. With `detail` (what it is, why it is a problem) it explains itself; without, it is the compact card."""
     title = Text(name, style=f"bold {INK}", justify="left")
     title.append(f"   Lv{number}" if number.isdigit() else f"   {number}", style=MUTED)
     lines = [title, _bar("HP", frac)]
+    if detail:
+        lines.append(_field("What it is:", detail["what"]))
+        lines.append(_field("Why it is a problem:", detail["problem"], "#9c2f3f"))
     lines.append(Text("FAINTED", style="bold #d1495b", justify="left") if frac <= 0 else Text(f"weak to: {weak_to}", style=MUTED, justify="left"))
     return _box(*lines, width=width, title="OBSTACLE")
 
@@ -180,7 +207,8 @@ def scene(ctx, number: str, title: str, step: str, creature_ids: list[str]) -> R
     top = Table.grid(expand=True)
     top.add_column(ratio=1)
     top.add_column(justify="right")
-    top.add_row(_opponent_box(name, number, 1.0, f"{lead['name']} ({short_project(lead)})"), _on_platform(sprites.render_grid(opp_rows)))
+    top.add_row(_opponent_box(name, number, 1.0, f"{lead['name']} ({short_project(lead)})", width=66, detail=obstacle_info(number)),
+                _on_platform(sprites.render_grid(opp_rows)))
     bottom = Table.grid(expand=True)
     bottom.add_column(ratio=1)
     bottom.add_column(justify="right")
@@ -226,7 +254,7 @@ def outcome(ctx, attempt_id: str, status: str, number: str | None) -> None:
     name, _ = _opponent(number)
     width = _width(ctx)
     fell = status in ("LIVE", "REPLAY")
-    box = _opponent_box(name, number, 0.0 if fell else 1.0, creature["name"], width=44)
+    box = _opponent_box(name, number, 0.0 if fell else 1.0, creature["name"], width=44)   # compact: no description
     lines = [OUTCOME.get(status, status).format(opp=name)]
     if fell:
         lines.append(achieved)
@@ -260,6 +288,8 @@ def menu_panel(ctx, creature: dict, number: str | None, cursor: int) -> Panel:
     label, _, hint = CHOICES[cursor]
     left = Text(justify="left")
     left.append(f"{creature['name']} ({short_project(creature)}) vs {opp}\n", style=f"bold {INK}")
+    if obstacle_info(number).get("short"):
+        left.append(f"{opp}: {obstacle_info(number)['short']}\n", style="#9c2f3f")
     left.append(f"What will {creature['name']} do?\n", style=INK)
     left.append(hint.format(project=creature["project"]), style=MUTED)
     grid = Table.grid(padding=(0, 4))
@@ -272,8 +302,10 @@ def menu_panel(ctx, creature: dict, number: str | None, cursor: int) -> Panel:
     outer.add_column(ratio=3)
     outer.add_column(ratio=2)
     outer.add_row(left, grid)
-    return Panel(outer, width=_width(ctx), border_style=INK, style=SCENE, padding=(0, 2),
-                 subtitle=Text(" ← ↑ ↓ →  move      ENTER  choose ", style=MUTED), subtitle_align="right")
+    footer = Text(" ← ↑ ↓ → (or W A S D)  move      ENTER  choose ", style=MUTED)
+    if keys.unknown:   # a key the game does not know: say what arrived, so it can be fixed
+        footer = Text(f" key not recognised: {keys.unknown}  ·  use W A S D ", style="bold #d1495b")
+    return Panel(outer, width=_width(ctx), border_style=INK, style=SCENE, padding=(0, 2), subtitle=footer, subtitle_align="right")
 
 
 def dex_panel(ctx, creature_id: str, position: int, total: int) -> Panel:
@@ -342,6 +374,8 @@ def choose(ctx, attempt_id: str) -> str:
         keys.flush_input()
         while True:
             key = keys.read_key()
+            if key in ALIASES:
+                key = ALIASES[key]
             if in_dex:
                 if key == "left":
                     dex_at = max(0, dex_at - 1)
@@ -352,9 +386,11 @@ def choose(ctx, attempt_id: str) -> str:
                 ctx.dex_seen.add(order[dex_at])
                 live.update(frame(), refresh=True)
                 continue
-            if key in LETTERS:
-                cursor, key = LETTERS[key], "enter"
-            if key in ("enter", "space"):
+            if key in ("1", "2", "3", "4"):
+                cursor = int(key) - 1
+            elif key in ("tab", "backtab"):
+                cursor = (cursor + (1 if key == "tab" else -1)) % len(CHOICES)
+            elif key in ("enter", "space"):
                 _, result, _ = CHOICES[cursor]
                 if result != "dex":
                     break
@@ -372,7 +408,7 @@ def wait(ctx, prompt: str = "ENTER to continue") -> None:
     ctx.console.print(Text(f"▶ {prompt}   (or →)", style="dim"))
     with keys.raw_mode():
         keys.flush_input()
-        while keys.read_key() not in ("enter", "space", "right", "down"):
+        while ALIASES.get(key := keys.read_key(), key) not in ("enter", "space", "right", "down"):
             pass
 
 
