@@ -136,7 +136,7 @@ def cmd_sprites(args: argparse.Namespace) -> int:
 def cmd_gate(args: argparse.Namespace) -> int:
     from bestiary.gate import run_gate
 
-    return run_gate(args.runs, args.goose)
+    return run_gate(args.runs, args.goose, args.only)
 
 
 def cmd_k8s(args: argparse.Namespace) -> int:
@@ -193,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     gt = sub.add_parser("gate", help="reliability gate: run model steps N times")
     gt.add_argument("--runs", type=int, default=50)
     gt.add_argument("--goose", action="store_true", help="also gate goose (slow)")
+    gt.add_argument("--only", help="comma list of steps to gate: agent, reviewer, goose (goose implies --goose)")
     k = sub.add_parser("k8s", help="create or delete the kind cluster")
     k.add_argument("action", choices=["up", "down"])
 

@@ -287,22 +287,34 @@ def e5_bug(ctx: Ctx) -> None:
             env.update(GOOSE_PROVIDER="openai", GOOSE_MODEL=p.model)
         custom = os.environ.get("BESTIARY_GOOSE_CMD")  # e.g. "goose run --with-builtin developer -t"
         cmd = (shlex.split(custom) if custom else [goose, "run", "--no-session", "--with-builtin", "developer", "--text"]) + [prompt]
-        ctx.wire("command", " ".join(cmd[:-1]) + ' "<issue prompt>"')
-        code, out = _stream(cmd, WORK_DIR, env, ctx.settings.goose_timeout, ctx)
-        ctx.events.append({"kind": "goose output (last lines)", "data": "\n".join(out[-25:])})
-        if code is None:
-            raise Fallback(f"goose passed the {ctx.settings.goose_timeout}s stage cap")
-        diff = workspace.unified_diff()
-        if not diff:
-            raise Fallback("goose finished but changed nothing (a silent failure: the model never called a tool)")
-        ctx.wire("Diff written by goose", diff)
-        # LIVE only if the change really fixes the bug: the same check the reliability gate uses.
-        check = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=WORK_DIR,
-                               capture_output=True, text=True, timeout=60)
-        tail = (check.stdout.strip().splitlines() or check.stderr.strip().splitlines() or ["(no output)"])[-1]
-        ctx.wire("pytest on goose's change", {"passed": check.returncode == 0, "summary": tail})
-        if check.returncode != 0:
-            raise Fallback(f"goose changed the code but the tests still fail ({tail})")
+        attempts = max(1, ctx.settings.goose_attempts)
+        last = "goose did not run"
+        for attempt in range(1, attempts + 1):
+            if attempt > 1:
+                # Still LIVE: start again from the original code (the first change did not fix the bug).
+                ctx.say(f"The change did not fix the bug. Attempt {attempt} of {attempts}, from the original code.", "yellow")
+                workspace.reset()
+                ctx.events.clear()
+            ctx.wire("command", " ".join(cmd[:-1]) + f' "<issue prompt>"   (attempt {attempt} of {attempts})')
+            code, out = _stream(cmd, WORK_DIR, env, ctx.settings.goose_timeout, ctx)
+            ctx.events.append({"kind": "goose output (last lines)", "data": "\n".join(out[-25:])})
+            if code is None:
+                last = f"goose passed the {ctx.settings.goose_timeout}s stage cap"
+                continue
+            diff = workspace.unified_diff()
+            if not diff:
+                last = "goose finished but changed nothing (a silent failure: the model never called a tool)"
+                continue
+            ctx.wire("Diff written by goose", diff)
+            # LIVE only if the change really fixes the bug: the same check the reliability gate uses.
+            check = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=WORK_DIR,
+                                   capture_output=True, text=True, timeout=60)
+            tail = (check.stdout.strip().splitlines() or check.stderr.strip().splitlines() or ["(no output)"])[-1]
+            ctx.wire("pytest on goose's change", {"passed": check.returncode == 0, "summary": tail})
+            if check.returncode == 0:
+                return
+            last = f"goose changed the code but the tests still fail ({tail})"
+        raise Fallback(f"{last}; gave up after {attempts} attempt(s)")
 
     status = ctx.attempt("e5_goose", live)
     if status != "LIVE" or not workspace.unified_diff():

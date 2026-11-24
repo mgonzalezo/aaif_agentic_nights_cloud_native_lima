@@ -89,7 +89,7 @@ def _goose_once(provider) -> tuple[bool, float, str]:
     return tests.returncode == 0, elapsed, "" if tests.returncode == 0 else "tests still failing"
 
 
-def run_gate(runs: int, include_goose: bool) -> int:
+def run_gate(runs: int, include_goose: bool, only: str | None = None) -> int:
     console = Console()
     found = detect()
     if not found.provider:
@@ -98,6 +98,10 @@ def run_gate(runs: int, include_goose: bool) -> int:
     console.print(f"model: {found.provider.label()}  runs per step: {runs}")
     steps = [("agent loop (enc. 2)", _agent_once, runs - max(1, runs // 25), 20.0),
              ("reviewer (enc. 7)", _reviewer_once, runs - max(1, runs // 25), 20.0)]
+    if only:
+        wanted = {w.strip() for w in only.split(",")}
+        steps = [s for s in steps if s[0].split()[0] in wanted]
+        include_goose = "goose" in wanted
     if include_goose:
         if not shutil.which("goose"):
             console.print("[yellow]goose not installed; skipping goose gate[/]")

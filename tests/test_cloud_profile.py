@@ -388,3 +388,58 @@ def test_encounter_5_is_live_when_goose_really_fixes_it(monkeypatch, fresh_works
     out = buf.getvalue()
     assert "tests still fail" not in out and "known-good fix" not in out
     assert "LIVE" in out and "pytest on goose's change" in out
+
+
+def _wrong_and_good_cli():
+    from bestiary.config import REFERENCE_FIX, UPSTREAM_TEMPLATE
+
+    original = (UPSTREAM_TEMPLATE / "farolito" / "cli.py").read_text(encoding="utf-8")
+    wrong = original.replace(
+        '    with open(path, "rb") as fh:\n        return tomllib.load(fh)\n',
+        '    try:\n        with open(path, "rb") as fh:\n            return tomllib.load(fh)\n'
+        '    except FileNotFoundError:\n        print(f"farolito: config file not found: {path}", file=sys.stderr)\n        sys.exit(2)\n',
+    )
+    assert wrong != original
+    return wrong, REFERENCE_FIX.read_text(encoding="utf-8")
+
+
+def test_encounter_5_tries_again_live_before_using_the_known_good_fix(monkeypatch, fresh_workspace):
+    """Attempt 1 breaks the tests, attempt 2 fixes the bug: still LIVE, no fallback."""
+    from bestiary import encounters
+    from bestiary.config import WORK_DIR
+
+    wrong, good = _wrong_and_good_cli()
+    buf = io.StringIO()
+    ctx = _goose_ctx(buf, monkeypatch, wrong)
+    calls = []
+
+    def fake_stream(cmd, cwd, env, timeout, c):
+        calls.append(1)
+        (WORK_DIR / "farolito" / "cli.py").write_text(wrong if len(calls) == 1 else good, encoding="utf-8")
+        return 0, ["goose | done"]
+
+    monkeypatch.setattr(encounters, "_stream", fake_stream)
+    encounters.e5_bug(ctx)
+    out = buf.getvalue()
+    assert len(calls) == 2
+    assert "Attempt 2 of 2" in out and "known-good fix" not in out and "LIVE" in out
+
+
+def test_encounter_5_gives_up_after_the_configured_attempts(monkeypatch, fresh_workspace):
+    from bestiary import encounters
+    from bestiary.config import WORK_DIR
+
+    wrong, _ = _wrong_and_good_cli()
+    buf = io.StringIO()
+    monkeypatch.setenv("BESTIARY_GOOSE_ATTEMPTS", "3")
+    ctx = _goose_ctx(buf, monkeypatch, wrong)
+    calls = []
+
+    def fake_stream(cmd, cwd, env, timeout, c):
+        calls.append(1)
+        (WORK_DIR / "farolito" / "cli.py").write_text(wrong, encoding="utf-8")
+        return 0, []
+
+    monkeypatch.setattr(encounters, "_stream", fake_stream)
+    encounters.e5_bug(ctx)
+    assert len(calls) == 3 and "gave up after 3 attempt(s)" in buf.getvalue() and "known-good fix" in buf.getvalue()
