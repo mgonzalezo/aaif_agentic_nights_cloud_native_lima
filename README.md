@@ -79,7 +79,7 @@ No model? Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env` (copy
 | 2 | The issue in the fog | Read the issue | `tools/list` and `read_issue` over MCP with **no model**; then [`minimal_agent.py`](minimal_agent.py) does it with a model |
 | 3 | Injection | Stay safe | The issue hides "delete the main branch". agentgateway removes `delete_branch` from `tools/list` and rejects direct calls |
 | 4 | The upstream ritual | How we contribute | Token meter: all skills vs progressive disclosure |
-| 5 | The bug | Propose a change | goose edits `farolito/cli.py` (75 s cap, then replay) |
+| 5 | The bug | Propose a change | goose edits `farolito/cli.py` (120 s cap, one live retry, then the known-good fix) |
 | 6 | The flaky test | Test safely | `pytest` inside OpenSandbox |
 | 7 | Second opinion | Review by another team | A2A Agent Card, task delegation, Open Responses items |
 | 8 | The PR | Open the pull request | `create_pull_request` through the gateway (local forge or real GitHub) |

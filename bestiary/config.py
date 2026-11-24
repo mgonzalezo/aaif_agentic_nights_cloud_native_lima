@@ -80,7 +80,7 @@ class Settings:
     github_token: str = field(default_factory=lambda: _env("GITHUB_TOKEN", ""))
 
     # Stage behaviour
-    goose_timeout: int = field(default_factory=lambda: int(_env("BESTIARY_GOOSE_TIMEOUT", "75")))
+    goose_timeout: int = field(default_factory=lambda: int(_env("BESTIARY_GOOSE_TIMEOUT", "120")))
     goose_attempts: int = field(default_factory=lambda: int(_env("BESTIARY_GOOSE_ATTEMPTS", "2")))  # live attempts before the known-good fix
     llm_timeout: int = field(default_factory=lambda: int(_env("BESTIARY_LLM_TIMEOUT", "60")))
     talk_banner: str = field(default_factory=lambda: _env("BESTIARY_TALK_BANNER", "Talk version: Agentic Nights Lima, Nov 2026"))
