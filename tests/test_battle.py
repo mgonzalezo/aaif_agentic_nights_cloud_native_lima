@@ -62,17 +62,17 @@ def test_every_battle_scene_fits_110_columns_and_shows_the_fight(monkeypatch, nu
     out = buf.getvalue()
     assert all(cell_len(line) <= 110 for line in out.splitlines()), max(cell_len(line) for line in out.splitlines())
     lead = ctx.creatures[ids[0]]
-    assert "appeared!" in out and "HP" in out and "weak to:" in out
+    assert "appeared!" in out and "HP" in out and "weak to:" in out and "OBSTACLE" in out and "YOUR CREATURE" in out
     assert lead["name"].upper() in out and "runs on:" in out
-    for skill in lead["skills"][:3]:
-        assert skill["name"] in out
-    assert "RUN" in out
+    assert lead["project"] in out   # the real name of the project, next to the creature
+    for cid in ids:
+        assert f"{ctx.creatures[cid]['name']} = {battle.short_project(ctx.creatures[cid])}" in out   # the team legend
 
 
 def test_the_party_is_listed_when_the_encounter_has_helpers(monkeypatch):
     ctx, buf = make_ctx(monkeypatch)
     encounter_header(ctx, "5", "The bug", "Propose a change", ["mender", "scribbit", "satchel"])
-    assert "party: DeathNote, Navaja Suiza" in buf.getvalue()
+    assert "Your team:  Chambero = goose   ·   DeathNote = AGENTS.md   ·   Navaja Suiza = Agent Skills" in buf.getvalue()
 
 
 def test_a_narrow_terminal_falls_back_to_the_classic_screen(monkeypatch):
@@ -92,7 +92,7 @@ def test_a_live_step_ends_with_the_opponent_fainting(monkeypatch):
     encounter_header(ctx, "1", "How do I run the tests?", "Consult information", ["scribbit"])
     assert ctx.attempt("e1_doubt", lambda: ctx.say("the real output")) == "LIVE"
     out = buf.getvalue()
-    assert "DeathNote used How to run this!" in out
+    assert "DeathNote (AGENTS.md) used How to run this!" in out
     assert "DOUBT fainted! It's super effective!" in out and "the real output" in out
 
 

@@ -62,6 +62,8 @@ class Ctx:
     badge: str = "LIVE"
     where: Where = field(default_factory=Where)
     current_number: str | None = None  # encounter on screen (the battle UI needs it for the outcome)
+    current_party: list[str] = field(default_factory=list)  # creatures of that encounter, lead first
+    dex_seen: set[str] = field(default_factory=set)  # Pokedex entries already read (battle UI)
     _pending_live: bool = False
 
     def _flush_badge(self) -> None:
@@ -93,6 +95,12 @@ class Ctx:
     def pause(self, prompt: str = "Enter to continue") -> str:
         if self.auto:
             return ""
+        if self.settings.ui == "battle":
+            from bestiary import battle
+
+            if battle.interactive(self):
+                battle.wait(self)
+                return ""
         return self.console.input(f"[dim]{prompt} > [/]").strip().lower()
 
     # ---------- live / replay ----------
@@ -109,7 +117,7 @@ class Ctx:
     def _attempt(self, encounter_id: str, live: Callable[[], Any], didactic: Callable[[], Any] | None = None) -> str:
         """Run a live step; on Fallback (or if the presenter presses r) show the replay; else didactic."""
         self.events = []
-        choice = "" if self.auto else self.pause("[Enter] run live   [r] show replay   [s] skip")
+        choice = "" if self.auto else self._ask(encounter_id)
         if choice == "s":
             return "SKIPPED"
         if self.settings.ui == "battle":
@@ -148,6 +156,15 @@ class Ctx:
         self.say("No replay recorded yet. Record one with: uv run bestiary record", "yellow")
         return "MISSING"
 
+    def _ask(self, encounter_id: str) -> str:
+        """Before a step: the arrow-key menu in the battle UI, else the plain prompt. '' = run live, r = replay, s = skip."""
+        if self.settings.ui == "battle":
+            from bestiary import battle
+
+            if battle.interactive(self):
+                return battle.choose(self, encounter_id)
+        return self.pause("[Enter] run live   [r] show replay   [s] skip")
+
     def show_badge(self, badge: str, note: str = "") -> None:
         label, style = BADGES[badge]
         t = Text(f" {label} ", style=style)
@@ -174,6 +191,7 @@ def creature_card(c: dict, scale: int = 1, where: str = "") -> Panel:
 
 def encounter_header(ctx: Ctx, number: str, title: str, step: str, creature_ids: list[str]) -> None:
     ctx.current_number = number
+    ctx.current_party = list(creature_ids)
     if ctx.settings.ui == "battle":
         from bestiary import battle
 

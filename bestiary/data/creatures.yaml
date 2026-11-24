@@ -24,6 +24,9 @@
     - {name: Plan, does: "Breaks a task into steps."}
     - {name: Edit file, does: "Changes code through the developer extension."}
     - {name: Run recipe, does: "Replays a saved workflow: goose run --recipe."}
+  tagline: "Open-source AI agent that works in your terminal"
+  definition: "An open-source AI agent. You give it a goal in plain words; it plans, picks tools, edits files and runs commands on your machine, with the model you choose."
+  good_for: "Real chores on a codebase: fix a bug, change a file, run the tests, and repeat until it is done."
   weakness: "Only as good as its model. It can say it finished without calling any tool."
   source: https://goose-docs.ai
 
@@ -43,6 +46,9 @@
     - {name: tools/list, does: "Asks a server what it can do."}
     - {name: tools/call, does: "Runs one tool with JSON arguments."}
     - {name: Resources, does: "Shares files or data with the model."}
+  tagline: "The open standard that plugs tools into AI apps"
+  definition: "Model Context Protocol: an open standard for how an AI application asks a server what it can do (tools, data) and then calls it."
+  good_for: "Writing a tool once and letting every MCP-capable app use it: issues, files, databases, a forge."
   weakness: "Cannot act alone. It exposes whatever the server offers, good or bad."
   source: https://modelcontextprotocol.io
 
@@ -62,6 +68,9 @@
     - {name: Read card, does: "Fetches /.well-known/agent-card.json."}
     - {name: Delegate, does: "Sends a task to another team's agent."}
     - {name: Await status, does: "Follows the task until it completes."}
+  tagline: "How one agent hands a task to another team's agent"
+  definition: "Agent2Agent: an open protocol that lets agents built by different teams find each other (through an Agent Card) and work on a task together."
+  good_for: "Delegating work to a specialist agent you do not own, and following its progress until it finishes."
   weakness: "Useless with a single agent."
   source: https://aaif.io/blog/a2a-joins-aaif
 
@@ -80,6 +89,9 @@
   skills:
     - {name: How to run this, does: "Tells any agent the test command."}
     - {name: Repo rules, does: "States the house rules once, for every agent."}
+  tagline: "A README for AI agents"
+  definition: "A plain Markdown file in your repository with what a coding agent needs to know: how to build, how to test, the house rules."
+  good_for: "Telling every agent the same thing once, instead of repeating it in every prompt."
   weakness: "Long files cost tokens on every request. Keep it short."
   source: https://agents.md
 
@@ -99,6 +111,9 @@
     - {name: Discover, does: "The agent sees only name and description."}
     - {name: Activate, does: "Loads the full SKILL.md when it is relevant."}
     - {name: Use script, does: "Runs a helper script shipped with the skill."}
+  tagline: "Folders of know-how an agent loads only when needed"
+  definition: "An open format: a folder with a SKILL.md (and optional scripts and files). The agent reads only the name and description, and loads the rest when the task needs it."
+  good_for: "Sharing reusable procedures without filling the model's context window."
   weakness: "Needs an agent that supports it. Bundled scripts are a supply-chain risk."
   source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
 
@@ -118,6 +133,9 @@
     - {name: Allow-list, does: "Filters forbidden tools out of tools/list."}
     - {name: Federate, does: "Merges several MCP servers into one."}
     - {name: Observe, does: "Logs and traces every call."}
+  tagline: "A gateway between agents and their tools"
+  definition: "An open-source proxy for agent traffic (MCP, A2A and model calls). Every request goes through it, so the rules live in one place."
+  good_for: "Hiding dangerous tools, merging several MCP servers into one, and logging every call."
   weakness: "One more process and more YAML. Windows: use WSL2 for now."
   source: https://agentgateway.dev
 
@@ -137,6 +155,9 @@
     - {name: Divert, does: "Routes a request to a model by rule."}
     - {name: Plan B, does: "Fails over to another provider."}
     - {name: Budget, does: "Applies token quotas per team."}
+  tagline: "Sends each model request down the best route"
+  definition: "A router for model traffic: one endpoint in front of many models and providers, with routing rules, fail-over and token budgets."
+  good_for: "Keeping an app alive when a model or provider fails, and sending cheap requests to cheap models."
   weakness: "Overlaps with Rondero in this story. aigw run is Linux and macOS only."
   source: https://aaif.io/blog/agent-router-joins-aaif
 
@@ -156,6 +177,9 @@
     - {name: Common tongue, does: "POST /v1/responses works across providers."}
     - {name: Items, does: "Output is a list of typed items: message, function_call."}
     - {name: Conformance, does: "A test suite checks that providers agree."}
+  tagline: "One API shape to talk to any model provider"
+  definition: "An open specification for the /v1/responses API: requests and typed output items (messages, function calls) that look the same across providers."
+  good_for: "Changing models or vendors without rewriting your agent."
   weakness: "Not a server. Local servers often support only a stateless subset."
   source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
 
@@ -175,6 +199,9 @@
     - {name: Bubble, does: "Creates an isolated container."}
     - {name: Run, does: "Executes pytest inside it."}
     - {name: Discard, does: "Destroys the sandbox afterwards."}
+  tagline: "A throwaway box to run code you do not trust"
+  definition: "An open-source sandbox platform: it creates an isolated container (on Docker or Kubernetes), runs commands inside it and then destroys it."
+  good_for: "Running the tests of AI-written code safely, without touching the real machine."
   weakness: "Needs Docker. Cold starts are slow."
   source: https://github.com/opensandbox-group/OpenSandbox
 
@@ -194,5 +221,8 @@
     - {name: reset(), does: "Starts a fresh episode."}
     - {name: step(), does: "Applies one action and returns an observation."}
     - {name: Reward, does: "Tests passed = reward 1.0."}
+  tagline: "A training ground for agents, with a score"
+  definition: "A framework for environments with a simple reset() and step() interface and a reward, used to train and evaluate agents."
+  good_for: "Practising and measuring an agent: tests pass, reward 1.0."
   weakness: "Not for using an assistant today; it is for training better ones. API still changing."
   source: https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox
