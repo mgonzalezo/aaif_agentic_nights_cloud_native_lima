@@ -33,3 +33,17 @@ The scenes are static on purpose: no animation, so they survive a slow SSM sessi
 `tests/test_battle.py`: every scene fits in 110 columns and shows the fight, the 11 opponents are valid sprites, a
 live step ends with the opponent fainting, a DIDACTIC step does not pretend to win, the narrow terminal falls back, classic
 stays the default, and the whole game runs in battle mode with a fake model.
+
+## Which branch is on the host
+
+The host runs one branch at a time, set by `REPO_REF` in `/etc/bestiary.env`. `feat/battle-ui` contains everything in
+`feat/aws-gpu-demo` plus the battle UI, and the classic screens are still what you get without `-Battle`. To switch
+(through `present.ps1 -Host`, about a minute, nothing is rebuilt from scratch):
+
+```bash
+sudo sed -i 's#^REPO_REF=.*#REPO_REF=feat/aws-gpu-demo#' /etc/bestiary.env   # the safe demo
+sudo sed -i 's#^REPO_REF=.*#REPO_REF=feat/battle-ui#' /etc/bestiary.env      # the battle UI
+sudo bash /opt/bestiary/infra/aws/refresh.sh --apply
+```
+
+The console pod restarts: reopen the game afterwards.
