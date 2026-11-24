@@ -65,6 +65,13 @@ pseudo-terminal on the host with the real escape sequences of the arrow keys.
 live step ends with the opponent fainting, a DIDACTIC step does not pretend to win, the narrow terminal falls back, classic
 stays the default, and the whole game runs in battle mode with a fake model.
 
+## Real terminal check
+
+Besides the scripted tests, the game was driven through a real pseudo-terminal in the console pod, pressing the real
+escape sequences of the arrow keys in bursts (open the Pokédex, close it, move the cursor, FIGHT; RUN with the arrows;
+REPLAY with the arrows): all three finished with exit code 0, no escape codes echoed on the screen. The script is not part
+of the repo; the idea is `pty.fork()` plus `os.write(fd, "\x1b[C")`.
+
 ## Which branch is on the host
 
 The host runs one branch at a time, set by `REPO_REF` in `/etc/bestiary.env`. `feat/battle-ui` contains everything in
