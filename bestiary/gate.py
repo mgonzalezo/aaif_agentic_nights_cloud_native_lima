@@ -68,7 +68,10 @@ def _reviewer_once(provider) -> tuple[bool, float, str]:
 
 
 def _goose_once(provider) -> tuple[bool, float, str]:
-    from bestiary.encounters import GOOSE_PROMPT
+    import json
+
+    from bestiary.config import UPSTREAM_TEMPLATE
+    from bestiary.encounters import goose_prompt
 
     workspace.reset()
     env = {**__import__("os").environ, "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1"}
@@ -76,8 +79,8 @@ def _goose_once(provider) -> tuple[bool, float, str]:
         env.update(GOOSE_PROVIDER="ollama", GOOSE_MODEL=provider.model, OLLAMA_HOST=settings().ollama_host)
     else:
         env.update(GOOSE_PROVIDER="openai", GOOSE_MODEL=provider.model)
-    prompt = GOOSE_PROMPT.format(n=7, title="Traceback when the config file is missing",
-                                 body_first_line="A missing config must print 'farolito: config file not found' to stderr and exit 2.")
+    issue = next(i for i in json.loads((UPSTREAM_TEMPLATE / "issues.json").read_text(encoding="utf-8")) if i["number"] == 7)
+    prompt = goose_prompt(7, issue)  # exactly what the game sends
     started = time.time()
     try:
         subprocess.run([shutil.which("goose"), "run", "--no-session", "--with-builtin", "developer", "--text", prompt],

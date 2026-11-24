@@ -234,9 +234,18 @@ def e4_ritual(ctx: Ctx) -> None:
 # --------------------------------------------------------------------------- 5
 GOOSE_PROMPT = (
     "You are working in the farolito repository (current directory). Fix issue #{n}: {title}. "
-    "Details: {body_first_line} Follow AGENTS.md. Change only farolito/cli.py. "
+    "Details: {body} Follow AGENTS.md. Change only farolito/cli.py. "
     "Do not run git commands. When done, say DONE."
 )
+
+
+def goose_prompt(n: int, issue: dict) -> str:
+    """The exact prompt goose gets in encounter 5 and in the gate. The issue body goes in whole, minus HTML
+    comments (the hidden note of encounter 3 is not an instruction for goose)."""
+    import re
+
+    body = " ".join(re.sub(r"<!--.*?-->", "", issue["body"], flags=re.S).split())
+    return GOOSE_PROMPT.format(n=n, title=issue["title"], body=body)
 
 
 def _stream(cmd: list[str], cwd, env, timeout: int, ctx: Ctx) -> tuple[int | None, list[str]]:
@@ -279,7 +288,7 @@ def e5_bug(ctx: Ctx) -> None:
             raise Fallback("no model for goose")
         _, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
         issue = json.loads(text)
-        prompt = GOOSE_PROMPT.format(n=n, title=issue["title"], body_first_line=issue["body"].splitlines()[0])
+        prompt = goose_prompt(n, issue)
         env = dict(os.environ, GOOSE_MODE="auto", GOOSE_DISABLE_KEYRING="1")  # never prompt, no OS keyring in a pod
         if p.name == "ollama":
             env.update(GOOSE_PROVIDER="ollama", GOOSE_MODEL=p.model, OLLAMA_HOST=ctx.settings.ollama_host)
@@ -381,17 +390,18 @@ def e6_tests(ctx: Ctx) -> None:
 # --------------------------------------------------------------------------- 7
 async def _a2a_review(url: str, diff: str) -> tuple[dict, list[dict]]:
     import httpx
-    from a2a.client import create_client
+    from a2a.client import ClientConfig, create_client
     from a2a.helpers import new_text_message
     from a2a.types import Role, SendMessageRequest
     from google.protobuf.json_format import MessageToDict
 
-    async with httpx.AsyncClient() as http:
+    # The reviewer calls the model; after goose the model can be busy for a while, so allow a long wait.
+    async with httpx.AsyncClient(timeout=180) as http:
         card = (await http.get(f"{url}/.well-known/agent-card.json", timeout=5)).json()
-    client = await create_client(url)
-    responses = []
-    async for r in client.send_message(SendMessageRequest(message=new_text_message(diff, role=Role.ROLE_USER))):
-        responses.append(MessageToDict(r))
+        client = await create_client(url, client_config=ClientConfig(httpx_client=http))
+        responses = []
+        async for r in client.send_message(SendMessageRequest(message=new_text_message(diff, role=Role.ROLE_USER))):
+            responses.append(MessageToDict(r))
     return card, responses
 
 

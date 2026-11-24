@@ -33,7 +33,7 @@ spec:
         env:
         - {name: OLLAMA_KEEP_ALIVE, value: "-1"}          # keep models loaded: no cold start on stage
         - {name: OLLAMA_MAX_LOADED_MODELS, value: "2"}    # main and failover resident together
-        - {name: OLLAMA_NUM_PARALLEL, value: "1"}
+        - {name: OLLAMA_NUM_PARALLEL, value: "2"}     # a request never queues behind a goose run that was cut off
         - {name: OLLAMA_FLASH_ATTENTION, value: "1"}
         - {name: OLLAMA_CONTEXT_LENGTH, value: "32768"}   # the default (4096) is too small for goose
         ports: [{containerPort: 11434}]
