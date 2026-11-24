@@ -13,6 +13,7 @@ only through SSM Session Manager. Budget alerts (50/80/100 % actual, 100 % forec
 | `deploy.ps1/.sh` | Preflight (identity, token, G/VT quota, AZ), cost estimate, typed confirm, `cloudformation deploy` |
 | `present.ps1/.sh` | SSM session into the console pod (`-Doctor`, `-Shell`, `-Host`, `-Logs` modes; `-Battle` for the battle screens) |
 | `teardown.ps1/.sh` | Delete the stack, then audit that nothing billable is left (PASS/FAIL exit code) |
+| `schedule-teardown.ps1/.sh` + `teardown-schedule.yaml` | Schedule the deletion for a fixed date and time: EventBridge Scheduler calls `DeleteStack`, and half an hour later terminates the instance (`-Status`, `-Cancel`). Free |
 | `bootstrap.sh` | Runs on the host from user data: NVIDIA runtime, k3s, Helm, device plugin, images, OpenSandbox, `kubectl apply -k k8s/overlays/ec2`, model pull |
 | `refresh.sh` | On the host: pull the latest commit, `--apply` re-runs bootstrap (about 1 minute) |
 | `opensandbox-values.yaml` | Helm values for the OpenSandbox server (Kubernetes runtime) |
@@ -22,7 +23,7 @@ only through SSM Session Manager. Budget alerts (50/80/100 % actual, 100 % forec
 2. `powershell infra\aws\put-github-token.ps1` (fine-grained PAT for this repo and your `farolito-demo` repo: Contents, Issues and Pull requests read/write; short expiry).
 3. `powershell infra\aws\deploy.ps1 -BudgetEmail you@example.com -DemoIssue <N>` (`<N>` = issue number printed by `uv run bestiary github-setup <you>/farolito-demo`; without it, encounter 8 uses the local forge) (add `-WhatIf` to rehearse; read-only).
 4. `powershell infra\aws\present.ps1 -Logs` until bootstrap finishes (20+ min), then `present.ps1` to play.
-5. `powershell infra\aws\teardown.ps1 -DeleteTokenParameter` and revoke the token on GitHub.
+5. `powershell infra\aws\schedule-teardown.ps1 -RunAt 2026-12-01T12:00:00` on day one (AWS deletes it for you), or `powershell infra\aws\teardown.ps1 -DeleteTokenParameter` when you are done, and revoke the token on GitHub.
 Bash twins use long options: `bash infra/aws/deploy.sh --budget-email you@example.com --dry-run`.
 
 ## Good to know

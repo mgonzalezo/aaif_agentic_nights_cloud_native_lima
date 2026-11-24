@@ -84,13 +84,12 @@ of the repo; the idea is `pty.fork()` plus `os.write(fd, "\x1b[C")`.
 
 ## Which branch is on the host
 
-The host runs one branch at a time, set by `REPO_REF` in `/etc/bestiary.env`. `feat/battle-ui` contains everything in
-`feat/aws-gpu-demo` plus the battle UI, and the classic screens are still what you get without `-Battle`. To switch
+The host runs one branch at a time, set by `REPO_REF` in `/etc/bestiary.env`. The battle screens are part of `main`, and
+the classic screens are still what you get without `-Battle`. To run another branch
 (through `present.ps1 -Host`, about a minute, nothing is rebuilt from scratch):
 
 ```bash
-sudo sed -i 's#^REPO_REF=.*#REPO_REF=feat/aws-gpu-demo#' /etc/bestiary.env   # the safe demo
-sudo sed -i 's#^REPO_REF=.*#REPO_REF=feat/battle-ui#' /etc/bestiary.env      # the battle UI
+sudo sed -i 's#^REPO_REF=.*#REPO_REF=main#' /etc/bestiary.env        # or any other branch or tag
 sudo bash /opt/bestiary/infra/aws/refresh.sh --apply
 ```
 

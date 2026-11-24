@@ -21,6 +21,9 @@ Every step shows a badge:
 > Unofficial personal project. Not endorsed by the AAIF or the Linux Foundation.
 > No project logos are used. See [NOTICE](NOTICE).
 
+**Start here:** [instructions.md](instructions.md) to play it (Windows, macOS, Fedora and other Linux),
+[developers.md](developers.md) to deploy it in the cloud or change it.
+
 ## Quick start (5 minutes)
 
 You need [uv](https://docs.astral.sh/uv/). It installs Python for you.
@@ -117,11 +120,11 @@ gateway/             agentgateway config (allow-list policy)
 goose/               goose recipe for rehearsing encounter 5 by hand
 k8s/                 Dockerfile and kustomize: base/ shared, overlays/kind (laptop), overlays/ec2 (GPU)
 envs/farolito_env/   OpenEnv environment for encounter 10
-infra/aws/           CloudFormation, deploy/teardown/present scripts, bootstrap.sh (GPU demo host)
+infra/aws/           CloudFormation, deploy/teardown/present/schedule-teardown scripts, bootstrap.sh (the demo host)
 agent-router/        how to record the Agent Router replay
 docker/              sandbox image for OpenSandbox
 replays/             recorded real runs
-docs/                setup per OS, AWS GPU deploy, stage runbook
+docs/                setup per OS, AWS deploy, battle screens, stage runbook and the presenter script
 ```
 
 ## Licence

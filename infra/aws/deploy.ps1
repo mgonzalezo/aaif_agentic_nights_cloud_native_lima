@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-$ExpectedAccount = '000000000000'
+$ExpectedAccount = $env:BESTIARY_EXPECTED_ACCOUNT   # optional guard: warn if the profile is another account
 $GpuTypes = @('g6e.2xlarge', 'g6e.xlarge', 'g5.2xlarge', 'g6.2xlarge')
 # GPU types are limited by 'Running On-Demand G and VT instances'; CPU types by the Standard (A, C, D, H, I, M, R, T, Z) quota.
 $QuotaCode = if ($GpuTypes -contains $InstanceType) { 'L-DB2E81BA' } else { 'L-1216C47A' }
@@ -71,7 +71,7 @@ $acct = Invoke-AwsCli @('sts', 'get-caller-identity', '--query', 'Account', '--o
 if ($script:AwsExit -ne 0 -or -not $acct) { Stop-Here "Cannot call STS with profile '$Profile'. Check credentials." }
 $arn = Invoke-AwsCli @('sts', 'get-caller-identity', '--query', 'Arn', '--output', 'text') -Quiet
 Say "Profile : $Profile`nRegion  : $Region`nAccount : $acct`nCaller  : $arn"
-if ($acct -ne $ExpectedAccount) { Say "WARNING: expected account $ExpectedAccount, got $acct." 'Yellow' }
+if ($ExpectedAccount -and $acct -ne $ExpectedAccount) { Say "WARNING: expected account $ExpectedAccount, got $acct." 'Yellow' }
 
 # 2. GitHub token parameter exists (existence only: no decryption, only the Type field is queried)
 $ptype = Invoke-AwsCli @('ssm', 'get-parameter', '--name', $TokenParameterName, '--query', 'Parameter.Type', '--output', 'text') -Quiet

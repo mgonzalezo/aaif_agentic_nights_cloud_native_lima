@@ -20,7 +20,7 @@ TOKEN_PARAM=/bestiary/github-token
 SKIP_BUDGET=false
 YES=false
 DRY=false
-EXPECTED_ACCOUNT=000000000000
+EXPECTED_ACCOUNT="${BESTIARY_EXPECTED_ACCOUNT:-}"   # optional guard: warn if the profile is another account
 QUOTA_CODE=L-DB2E81BA   # set per instance type below (GPU: G/VT, CPU: Standard)
 QUOTA_NAME=G/VT
 
@@ -89,7 +89,7 @@ ACCT="$(awsx sts get-caller-identity --query Account --output text 2>/dev/null)"
 [ -n "$ACCT" ] || stop_here "Cannot call STS with profile '$PROFILE'. Check credentials."
 ARN="$(awsx sts get-caller-identity --query Arn --output text 2>/dev/null)"
 say "Profile : $PROFILE"; say "Region  : $REGION"; say "Account : $ACCT"; say "Caller  : $ARN"
-[ "$ACCT" = "$EXPECTED_ACCOUNT" ] || say "WARNING: expected account $EXPECTED_ACCOUNT, got $ACCT."
+[ -z "$EXPECTED_ACCOUNT" ] || [ "$ACCT" = "$EXPECTED_ACCOUNT" ] || say "WARNING: expected account $EXPECTED_ACCOUNT, got $ACCT."
 
 # 2. GitHub token parameter exists (existence only: no --with-decryption, only Type is queried)
 if PTYPE="$(awsx ssm get-parameter --name "$TOKEN_PARAM" --query Parameter.Type --output text 2>/dev/null)"; then

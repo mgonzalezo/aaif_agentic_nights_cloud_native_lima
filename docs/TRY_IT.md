@@ -1,7 +1,7 @@
 # Try it yourself (step by step)
 
-State of the demo host on 2026-11-23 (the day it was built and tested). Everything below was run
-for real unless it says "not tested".
+Measured on the CPU demo host on 2026-11-23 and 2026-11-24. Everything below was run for real unless it
+says "not tested". For the short version of the deployment, see [developers.md](../developers.md).
 
 > **COST WARNING.** The host is a **c7i.8xlarge (about 1.48 USD per hour, with disk and IPv4)**. It
 > stops itself 6 hours after every boot (the OS powers off and EC2 *stops* it). A stopped host
@@ -10,29 +10,26 @@ for real unless it says "not tested".
 
 | What | Value |
 |---|---|
-| Stack, region | `bestiary-demo`, `us-east-1` (AWS profile `cloud_native_lima`) |
-| Instance | c7i.8xlarge (32 vCPU, 64 GiB, **no GPU**), Ubuntu 24.04, k3s v1.37.2. **Deleted on 2026-11-23 at the end of the day: redeploy it (section 2).** The GitHub token parameter `/bestiary/github-token` was kept |
+| Stack, region | `bestiary-demo`, `us-east-1` (your `AWS_PROFILE`) |
+| Instance | c7i.8xlarge (32 vCPU, 64 GiB, **no GPU**), Ubuntu 24.04, k3s v1.37.2. It exists only while you keep the stack (section 2 deploys it, section 8 deletes it). The GitHub token parameter `/bestiary/github-token` is kept until you remove it |
 | Models | `qwen3.5:35b` (main, thinking off) and `qwen3.5:4b` (failover) |
-| Code on the host | branch `feat/aws-gpu-demo` |
+| Code on the host | branch `main`, or the one you pass with `-RepoRef` |
 
 ## 1. One-time setup on your laptop
 
-1. **AWS CLI v2** and the profile `cloud_native_lima` (already working on this laptop).
-2. **Session Manager plugin** (needed to open a terminal in the instance; not installed on this
-   laptop yet): https://s3.amazonaws.com/session-manager-downloads/plugin/latest/windows/SessionManagerPluginSetup.exe
+1. **AWS CLI v2** and a profile with access to your account (set `AWS_PROFILE`, or pass `-Profile`).
+2. **Session Manager plugin** (needed to open a terminal in the instance): https://s3.amazonaws.com/session-manager-downloads/plugin/latest/windows/SessionManagerPluginSetup.exe
    then close and reopen your terminal and check `session-manager-plugin --version`.
 3. A terminal at least **110 columns** wide (Windows Terminal is fine), font 16 pt or more.
-4. This repo, on branch `feat/aws-gpu-demo`: `git checkout feat/aws-gpu-demo`.
+4. This repo, on branch `main`.
 
 ## 2. Redeploy the host (about 20 minutes, about 0.5 USD to get ready)
 
-The host was deleted (`teardown`) after the first day of testing, so tomorrow starts with a deploy.
-The GitHub token parameter is still in AWS, so you do not need to create it again.
+The host does not exist until you deploy it. The GitHub token parameter (`put-github-token`) is stored once and reused.
 
 ```powershell
-cd C:\Users\xmarc\Documents\Japan\Talks\AAFIF_Nights\aaif_agentic_nights_cloud_native_lima
-git checkout feat/aws-gpu-demo
-powershell -ExecutionPolicy Bypass -File .\infra\aws\deploy.ps1 -InstanceType c7i.8xlarge -AutoStopHours 6 -RepoRef feat/aws-gpu-demo -SkipBudget
+cd <the folder of this repo>
+powershell -ExecutionPolicy Bypass -File .\infra\aws\deploy.ps1 -InstanceType c7i.8xlarge -AutoStopHours 6 -RepoRef main -SkipBudget
 ```
 
 It shows the cost estimate and asks you to type a confirmation. Add `-Yes` to skip the question, or
@@ -48,8 +45,7 @@ powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -Logs    # need
 ```
 
 It is finished when the log says `READY` and shows `bestiary doctor` with every row `ok`. If it stops with
-`FAILED`, send me the last 30 lines of `/var/log/bestiary-bootstrap.log` (or ask me to read it with
-`aws ssm send-command`).
+`FAILED`, read the last 30 lines of `/var/log/bestiary-bootstrap.log` (`present.ps1 -Host`, or `aws ssm send-command`).
 
 Then check from the laptop:
 
@@ -60,7 +56,7 @@ powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1 -Doctor
 ## 3. Warm up the models (important after every start)
 
 A restart unloads the models from memory. The first request loads them from disk: measured for
-`qwen3.5:4b` at **28 seconds**; the 22 GB `35b` takes longer (I did not capture the exact figure).
+`qwen3.5:4b` at **28 seconds**; the 22 GB `35b` takes longer (not measured).
 Warm both before you play, otherwise the first live step looks slow:
 
 ```powershell
@@ -143,14 +139,14 @@ Needs a demo repo and a token that can write to it.
 | Code changed on GitHub | On the host: `sudo bash /opt/bestiary/infra/aws/refresh.sh --apply` (about 1 minute, idempotent) |
 | Bootstrap log | `present.ps1 -Logs`, or on the host `/var/log/bestiary-bootstrap.log` |
 | Agent Router evidence | In the console pod: `curl -s http://agent-router:1064/metrics \| grep request_duration_seconds_count` |
-| Goose fails live | Expected (14/20). Press `r` for the real recorded run |
+| Goose fails live | It is the least reliable step (16/20 within 120 s). The game retries once; press `r` for the real recorded run |
 
 ## 8. Stop paying
 
 | Command | Effect |
 |---|---|
 | (nothing) | Auto-stop powers the host off 6 hours after boot. Disk still bills (about 0.02 USD/h) |
-| `aws ec2 stop-instances --instance-ids <id from the deploy output> --region us-east-1 --profile cloud_native_lima` | Stop now (the stack and disk stay, so you can start it again) |
+| `aws ec2 stop-instances --instance-ids <id from the deploy output> --region us-east-1 --profile <your profile>` | Stop now (the stack and disk stay, so you can start it again) |
 | `powershell infra\aws\teardown.ps1 -DeleteTokenParameter` | Delete everything and audit that nothing billable is left. Then revoke the GitHub token on GitHub |
 
 ## 9. GPU: does it make sense?

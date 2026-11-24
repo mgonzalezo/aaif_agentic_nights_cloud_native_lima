@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bestiary demo: a one-time scheduled TEARDOWN. At the time you choose, EventBridge Scheduler calls
+  CloudFormation DeleteStack on the demo stack (instance, its disk, security group, role, instance profile).
+  Half an hour later a second schedule terminates the instance directly, in case the first call did not get
+  that far. Nothing here costs money: EventBridge Scheduler's free tier covers a handful of invocations and an
+  IAM role is free. The schedules stay (free) after they ran; delete this stack to remove them and the role. Deploy it with
+  infra/aws/schedule-teardown.ps1 (or .sh), which fills in the parameters and shows what will be deleted.
+
+Parameters:
+  StackName:
+    Type: String
+    Default: bestiary-demo
+    Description: The demo stack to delete.
+  RunAt:
+    Type: String
+    AllowedPattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+    Description: When to delete the stack, local time of TimeZone, like 2026-11-27T12:00:00.
+  BackupRunAt:
+    Type: String
+    AllowedPattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+    Description: When to terminate the instance directly (the safety net), like 2026-11-27T12:30:00.
+  TimeZone:
+    Type: String
+    Default: UTC
+    Description: IANA time zone of RunAt and BackupRunAt, for example UTC or America/Lima.
+  InstanceId:
+    Type: String
+    Default: ""
+    Description: The instance of the demo stack, for the safety net. Empty = no safety net.
+
+Conditions:
+  HasInstance: !Not [!Equals [!Ref InstanceId, ""]]
+
+Resources:
+  TeardownRole:
+    Type: AWS::IAM::Role   # unnamed on purpose: CAPABILITY_IAM is enough
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { "aws:SourceAccount": !Ref "AWS::AccountId" }
+      Policies:
+        - PolicyName: delete-the-demo-stack-and-nothing-else
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DeleteOneStack
+                Effect: Allow
+                Action: [cloudformation:DeleteStack, cloudformation:DescribeStacks, cloudformation:DescribeStackEvents, cloudformation:DescribeStackResources, cloudformation:ListStackResources]
+                Resource: !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StackName}/*"
+              # CloudFormation deletes the resources with THIS role's permissions (the stack has no service role),
+              # so the role must be allowed to delete exactly what the demo stack creates, and only that.
+              - Sid: TerminateTaggedInstances
+                Effect: Allow
+                Action: ec2:TerminateInstances
+                Resource: !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+                Condition:
+                  StringEquals: { "aws:ResourceTag/Project": bestiary-demo }
+              - Sid: DeleteTaggedSecurityGroups
+                Effect: Allow
+                Action: ec2:DeleteSecurityGroup
+                Resource: !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*"
+                Condition:
+                  StringEquals: { "aws:ResourceTag/Project": bestiary-demo }
+              - Sid: LookAtEc2
+                Effect: Allow
+                Action: [ec2:DescribeInstances, ec2:DescribeInstanceStatus, ec2:DescribeSecurityGroups, ec2:DescribeNetworkInterfaces, ec2:DescribeVolumes, ec2:DescribeTags]
+                Resource: "*"
+              - Sid: DeleteTheRoleAndInstanceProfileOfTheStack
+                Effect: Allow
+                Action:
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:DeleteInstanceProfile
+                  - iam:GetInstanceProfile
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListRolePolicies
+                  - iam:ListInstanceProfilesForRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackName}-*"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:instance-profile/${StackName}-*"
+              - Sid: DeleteTheBudgetIfThereWasOne
+                Effect: Allow
+                Action: [budgets:ModifyBudget, budgets:ViewBudget]
+                Resource: !Sub "arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/${StackName}-*"
+
+  DeleteStackSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-delete-stack"
+      Description: !Sub "One-time: delete the CloudFormation stack ${StackName}."
+      FlexibleTimeWindow: { Mode: "OFF" }
+      ScheduleExpression: !Sub "at(${RunAt})"
+      ScheduleExpressionTimezone: !Ref TimeZone
+      Target:
+        Arn: "arn:aws:scheduler:::aws-sdk:cloudformation:deleteStack"
+        RoleArn: !GetAtt TeardownRole.Arn
+        Input: !Sub '{"StackName":"${StackName}"}'
+        RetryPolicy: { MaximumRetryAttempts: 5, MaximumEventAgeInSeconds: 3600 }
+
+  TerminateInstanceSchedule:
+    Type: AWS::Scheduler::Schedule
+    Condition: HasInstance
+    Properties:
+      Name: !Sub "${AWS::StackName}-terminate-instance"
+      Description: "One-time safety net: terminate the instance directly (harmless if it is already gone)."
+      FlexibleTimeWindow: { Mode: "OFF" }
+      ScheduleExpression: !Sub "at(${BackupRunAt})"
+      ScheduleExpressionTimezone: !Ref TimeZone
+      Target:
+        Arn: "arn:aws:scheduler:::aws-sdk:ec2:terminateInstances"
+        RoleArn: !GetAtt TeardownRole.Arn
+        Input: !Sub '{"InstanceIds":["${InstanceId}"]}'
+        RetryPolicy: { MaximumRetryAttempts: 3, MaximumEventAgeInSeconds: 3600 }
+
+Outputs:
+  DeletesAt:
+    Description: When the demo stack will be deleted
+    Value: !Sub "${RunAt} ${TimeZone}"
+  Role:
+    Value: !GetAtt TeardownRole.Arn

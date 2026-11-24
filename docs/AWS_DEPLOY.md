@@ -16,7 +16,7 @@ delete it when you are done.
 
 | Need | Detail |
 |---|---|
-| AWS account, profile with admin-like rights | CloudFormation, EC2, IAM, SSM, Budgets. Examples use `--profile cloud_native_lima`. |
+| AWS account, profile with admin-like rights | CloudFormation, EC2, IAM, SSM, Budgets. Set `AWS_PROFILE` (or pass `--profile` / `-Profile`). |
 | **GPU quota** | Service Quotas, EC2, "Running On-Demand G and VT instances" (`L-DB2E81BA`). New accounts start at **0**. You need **8 vCPU** for a g6e.2xlarge. Request it first; approval can take from minutes to days. |
 | AWS CLI v2 and the **Session Manager plugin** | https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html |
 | A GitHub token (only for the real pull request in encounter 8) | Fine-grained token for **two repos**: this one (to clone it if private) and your own `farolito-demo` repo. Contents, Issues and Pull requests read/write. Short expiry. |
@@ -48,7 +48,7 @@ The GPU quota starts at 0 and approval can take days. The **Standard** on-demand
 (`L-1216C47A`) is usually available at once, so the same stack also runs on a CPU instance:
 
 ```powershell
-powershell infraws\deploy.ps1 -BudgetEmail you@example.com -InstanceType c7i.8xlarge
+powershell infra\aws\deploy.ps1 -BudgetEmail you@example.com -InstanceType c7i.8xlarge
 ```
 
 | CPU instance | vCPU / RAM | USD/hour | 72 h |
@@ -220,7 +220,7 @@ Ollama `0.40.16`, Agent Router `v1.3.0`, agentgateway `v1.7.0`, OpenSandbox `rel
 deployment was CPU only), a real GitHub pull request (encounter 8 used the local forge),
 `present.ps1` (the Session Manager plugin is not installed on the build laptop, so the host was
 driven with `aws ssm send-command`), and Graviton (arm64). `ollama ps` showed a small "GPU" share
-on this CPU-only host; I did not investigate it and did not rely on it.
+on this CPU-only host; it was not investigated and the demo does not rely on it.
 
 **Bugs found only by running it** (all fixed on this branch): `kubectl wait` before the node
 registered, a missing buildx on the Ubuntu `docker.io` package, the OpenSandbox chart creating
