@@ -91,6 +91,7 @@ No model? Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env` (copy
 
 ```bash
 uv run bestiary                 # play (Enter = live, r = replay, s = skip)
+uv run bestiary play --ui battle # Pokemon-style battle screens (docs/BATTLE_UI.md)
 uv run bestiary play --only 3   # one encounter (index)
 uv run bestiary play --replay-only
 uv run bestiary doctor
