@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File .\infra\aws\present.ps1
 ```
 
 Before each step: **Enter** = run live, **r** = show the replay, **s** = skip. Each creature card
-says where it runs (pod and node). Expected badges (measured in three full rehearsals):
+says where it runs (pod and node). Expected badges (final rehearsals on 24 Nov, c7i.8xlarge, three full runs: all 12 steps LIVE every time, 97 s, 116 s and 275 s in total; the long one is goose retrying live):
 
 | # | Step | Badge | Measured |
 |---|---|---|---|
@@ -92,7 +92,7 @@ says where it runs (pod and node). Expected badges (measured in three full rehea
 | 2 | MCP with no model, then the agent loop | LIVE | 1 s, 3 s |
 | 3 | agentgateway hides `delete_branch`, rejects a direct call | LIVE | error -32602 "unknown resource" |
 | 4 | Agent Skills token meter | LIVE | instant |
-| 5 | goose fixes the bug | LIVE | 1 to 2 minutes. Gate 16/20 within 120 s (cap on stage: 150 s). It must pass the tests; if the first attempt does not, it retries live from the original code, and only after two failures falls back to the known-good fix |
+| 5 | goose fixes the bug | LIVE | 66 s, 89 s and 249 s in the final rehearsals (the 249 s one used the live retry). Gate 16/20 within 120 s (cap on stage: 150 s). It must pass the tests; if the first attempt does not, it retries live from the original code, and only after two failures falls back to the known-good fix |
 | 6 | pytest in OpenSandbox (one sandbox pod per run) | LIVE | 2 to 5 s, `2 passed` |
 | 7 | A2A review over Open Responses | LIVE | about 4 s |
 | 8 | PR through the gateway | LIVE (local forge) | instant. A real GitHub PR is optional, see section 6 |
