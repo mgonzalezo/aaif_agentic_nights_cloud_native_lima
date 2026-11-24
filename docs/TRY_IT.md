@@ -92,7 +92,7 @@ says where it runs (pod and node). Expected badges (measured in three full rehea
 | 2 | MCP with no model, then the agent loop | LIVE | 1 s, 3 s |
 | 3 | agentgateway hides `delete_branch`, rejects a direct call | LIVE | error -32602 "unknown resource" |
 | 4 | Agent Skills token meter | LIVE | instant |
-| 5 | goose fixes the bug | LIVE or **REPLAY** | Live it must also pass the tests (since commit b945c2c): gate 14/20, and 1 of 3 attempts in the last recording. If it does not, the step falls back to a real recorded run and says so |
+| 5 | goose fixes the bug | LIVE | 40 to 110 s. Gate 19/20 within 120 s. It must pass the tests; if the first attempt does not, it retries live from the original code, and only after two failures falls back to the known-good fix |
 | 6 | pytest in OpenSandbox (one sandbox pod per run) | LIVE | 2 to 5 s, `2 passed` |
 | 7 | A2A review over Open Responses | LIVE | about 4 s |
 | 8 | PR through the gateway | LIVE (local forge) | instant. A real GitHub PR is optional, see section 6 |
@@ -103,11 +103,12 @@ says where it runs (pod and node). Expected badges (measured in three full rehea
 A whole run takes 71 to 103 seconds of machine time without your pauses.
 
 Reliability gate (what decides LIVE or REPLAY) on this host: agent loop 50/50 with p95 3.5 s,
-reviewer 50/50 with p95 4.8 s (limit 20 s each); goose 14/20 with p95 75 s. Re-run it any time:
+reviewer 50/50 with p95 4.8 s (limit 20 s each); goose 19/20 within the 120 s cap (p50 66 s, p95 108 s) after the AGENTS.md rules. Re-run it any time:
 ```bash
 # inside the console pod (present.ps1 -Shell)
 bestiary gate --runs 50            # agent loop + reviewer
-bestiary gate --runs 20 --goose    # also goose (about 15 minutes)
+bestiary gate --runs 20 --goose    # also goose (about 25 minutes)
+bestiary gate --only goose --runs 20   # goose alone
 ```
 
 ## 5. Offline fallback on your laptop (no AWS, no GPU, no network)
@@ -156,8 +157,5 @@ Needs a demo repo and a token that can write to it.
 
 On this evidence, **not for the talk**. The CPU host passes the gate for the agent loop and the
 reviewer with a large margin (p95 3.5 s and 4.8 s against 20 s) at about 1.43 USD per hour,
-against 2.24 for a g6e.2xlarge. The step that fails the gate is goose (14/20). Its failures were a mix of
-wrong edits ("tests still failing") and hitting the 75 s cap (I saw both in the first dozen runs
-but did not keep the exact split: the log was lost when the pod restarted), so a GPU would only
-fix the slow ones. A GPU is worth one test only if you want a faster goose or a larger model: deploy with
+against 2.24 for a g6e.2xlarge. goose passes too now (19/20 within 120 s) after two changes: AGENTS.md states that `main()` returns the exit code and helpers never call `sys.exit()` (the mistake of the first recorded change), and encounter 5 retries once, live. Before that it was 14/20. Every failure left is slowness, so a GPU would only make it faster. A GPU is worth one test only if you want a faster goose or a larger model: deploy with
 `-InstanceType g6e.2xlarge` (the G/VT quota is now 8 vCPU in both regions) and run the same gate.
