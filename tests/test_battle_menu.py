@@ -165,3 +165,9 @@ def test_scripted_runs_never_wait_for_keys(monkeypatch):
     assert not battle.interactive(ctx)
     assert ctx.attempt("e1_doubt", lambda: ctx.say("x")) == "LIVE"
     ctx.pause()
+
+
+def test_raw_mode_is_harmless_when_there_is_no_terminal():
+    with keys.raw_mode():
+        with keys.raw_mode():   # nested: the inner one changes nothing
+            pass

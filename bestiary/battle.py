@@ -338,8 +338,8 @@ def choose(ctx, attempt_id: str) -> str:
     def frame() -> RenderableType:
         return dex_panel(ctx, order[dex_at], dex_at + 1, len(order)) if in_dex else menu_panel(ctx, lead, ctx.current_number, cursor)
 
-    keys.flush_input()
-    with Live(frame(), console=ctx.console, auto_refresh=False, transient=True) as live:
+    with keys.raw_mode(), Live(frame(), console=ctx.console, auto_refresh=False, transient=True) as live:
+        keys.flush_input()
         while True:
             key = keys.read_key()
             if in_dex:
@@ -370,9 +370,10 @@ def choose(ctx, attempt_id: str) -> str:
 def wait(ctx, prompt: str = "ENTER to continue") -> None:
     """The 'press a key' pause between screens: Enter or the right arrow."""
     ctx.console.print(Text(f"▶ {prompt}   (or →)", style="dim"))
-    keys.flush_input()
-    while keys.read_key() not in ("enter", "space", "right", "down"):
-        pass
+    with keys.raw_mode():
+        keys.flush_input()
+        while keys.read_key() not in ("enter", "space", "right", "down"):
+            pass
 
 
 def title_screen(ctx) -> None:

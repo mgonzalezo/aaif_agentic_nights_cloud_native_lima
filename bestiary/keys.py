@@ -2,17 +2,19 @@
 
 `read_key()` returns one of "up", "down", "left", "right", "enter", "space", "esc", a lower-case letter, or ""
 for a key the game ignores. It works on a Linux terminal (the console pod, through `kubectl exec -it`) and on
-Windows (a local laptop). Ctrl-C still stops the game: the terminal is only put in "cbreak" mode while one key
-is read, and is restored afterwards.
+Windows (a local laptop). Ctrl-C still stops the game. While a menu is open the terminal stays in "cbreak" mode (`raw_mode()`): keys that
+arrive in a burst are not echoed on the screen and none is lost between two reads; it is restored afterwards.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 
 _ARROWS = {"A": "up", "B": "down", "C": "right", "D": "left"}   # ESC [ A, or ESC O A in "application" mode
 _WINDOWS_ARROWS = {"H": "up", "P": "down", "K": "left", "M": "right"}
+_saved_mode = None   # the terminal settings to restore, while raw_mode() is active
 
 
 def stdin_is_tty() -> bool:
@@ -41,6 +43,31 @@ def decode_char(ch: str) -> str:
     if ch.isascii() and ch.isprintable():
         return ch.lower()
     return ""
+
+
+@contextlib.contextmanager
+def raw_mode():
+    """Keep the terminal in cbreak mode (no echo, no line buffering, Ctrl-C still works) until the block ends."""
+    global _saved_mode
+    if os.name == "nt" or _saved_mode is not None:
+        yield
+        return
+    try:
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        _saved_mode = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+    except Exception:   # not a terminal (a pipe, a test): read_key then falls back to one key at a time
+        _saved_mode = None
+        yield
+        return
+    try:
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, _saved_mode)
+        _saved_mode = None
 
 
 def flush_input() -> None:
@@ -76,9 +103,10 @@ def _read_posix() -> str:  # pragma: no cover - needs a terminal (covered by the
     import tty
 
     fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
+    old = None if _saved_mode is not None else termios.tcgetattr(fd)   # inside raw_mode() the mode is already set
     try:
-        tty.setcbreak(fd)
+        if old is not None:
+            tty.setcbreak(fd)
         ch = os.read(fd, 1).decode("latin-1")
         if ch != "\x1b":
             return decode_char(ch)
@@ -89,7 +117,8 @@ def _read_posix() -> str:  # pragma: no cover - needs a terminal (covered by the
                 break
         return decode_escape(seq)
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        if old is not None:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 def read_key() -> str:
