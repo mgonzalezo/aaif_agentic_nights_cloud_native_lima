@@ -13,7 +13,7 @@ CLI_FILES = {"template (with the bug)": ROOT / "upstream" / "farolito" / "faroli
 
 
 def test_agents_md_states_the_rules_that_goose_needs():
-    for must in ("main()` returns the process exit code", "never call `sys.exit()`", "exit with code 2",
+    for must in ("main()` returns the process exit code", "never call `sys.exit()`", "exit with code 2", "Run it before you say you are done",
                  "farolito: config file not found: <path>"):
         assert must in AGENTS, must
 

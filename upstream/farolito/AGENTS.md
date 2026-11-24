@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## How to run the tests
-- `python -m pytest -q` from the repository root. No network needed.
+- `python -m pytest -q` from the repository root. No network needed. Run it before you say you are done.
 
 ## Repo rules
 - Keep changes to one file when possible.
