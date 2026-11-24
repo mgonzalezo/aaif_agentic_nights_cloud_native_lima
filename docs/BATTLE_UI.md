@@ -15,7 +15,7 @@ The creatures have Peruvian names, so every screen also carries the **real name 
 
 | Part of the screen | What it is |
 |---|---|
-| **OBSTACLE** (top right, with an HP bar) | The obstacle of the encounter: Doubt, Fog, Injection, Ritual, Bug, Flaky Test, Review, Gate, Detour, Dummy, Cluster. 11 original 16x16 sprites in `bestiary/opponents.py` |
+| **OBSTACLE** (top right, with an HP bar) | The monster of the encounter: Doubt, Fog, Injection, Ritual, Bug, Flaky Test, Review, Gate, Detour, Dummy, Cluster. Its box says **what it is** and **why it is a problem** (text in `bestiary/data/obstacles.yaml`), and **weak to:** the creature that beats it. 11 original 16x16 sprites in `bestiary/opponents.py`. The menu repeats it in one line: `BUG: farolito crashes with a traceback when the config file is missing.` |
 | **YOUR CREATURE** (bottom left) | The first creature of the encounter, with its name, a blue tag with the project (`CHAMBERO  goose`), a one-line description, the real stats from `creatures.yaml` (AUT, REA, CTL, COST) and **`runs on:`**, the pod or host where it really runs |
 | Message box | "A wild BUG appeared!", the story step and **Your team: Chambero = goose · DeathNote = AGENTS.md ...** |
 | The menu, before each step | "Chambero (goose) vs BUG. What will Chambero do?" with the four choices below |
@@ -41,7 +41,17 @@ Before each step a menu appears. Move with **← ↑ ↓ →** and choose with *
 
 The first time you reach a creature the cursor starts on POKÉDEX, so **ENTER, ENTER, ENTER** reads the entry, goes back, and
 fights. If you already read it, the cursor starts on FIGHT. Between screens, **ENTER** (or **→**) continues. Keys pressed
-earlier are discarded, so a double Enter cannot choose by accident. The letters `p`, `f`, `r`, `s` still work as shortcuts.
+earlier are discarded, so a double Enter cannot choose by accident.
+
+If a terminal sends arrows the game does not understand, other keys do the same: **W A S D** or **H J K L** move, **1 2 3 4** jump to
+POKÉDEX / FIGHT / REPLAY / RUN, **Tab** goes to the next choice. The game understands arrows sent as `ESC [ A`, `ESC O A`
+(application mode), with Ctrl or Shift, and the Windows Terminal "win32-input-mode". A key it does not know is named in the
+footer of the menu (`key not recognised: ESC [ ...`). To see exactly what a terminal sends:
+
+```
+powershell infra\aws\present.ps1 -Shell      # a shell in the console pod
+bestiary keytest                              # press keys; q to stop
+```
 Scripted runs (`--auto`, the tests, a pipe) do not wait for keys and use the plain prompts.
 
 The text of the entries is in `bestiary/data/creatures.yaml` (`tagline`, `definition`, `good_for`, `weakness`): edit it there.
