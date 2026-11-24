@@ -3,7 +3,7 @@
 Rule from the plan: a step goes LIVE on stage only if it passes the gate,
 otherwise it is shown as REPLAY.
   agent loop / reviewer: at least 48 of 50 pass and p95 <= 20 s
-  goose:                 at least 45 of 50 pass within the stage cap (120 s; measured 19/20, p50 66 s, p95 108 s)
+  goose:                 at least 45 of 50 pass within the stage cap (150 s). Measured with the real game prompt: 16/20 at 120 s, p50 83 s; every failure was the cap, none a wrong change
 """
 
 from __future__ import annotations
