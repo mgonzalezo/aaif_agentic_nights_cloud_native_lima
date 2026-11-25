@@ -22,7 +22,7 @@ Every step shows a badge:
 > No project logos are used. See [NOTICE](NOTICE).
 
 **Start here:** [instructions.md](instructions.md) to play it (Windows, macOS, Fedora and other Linux),
-[developers.md](developers.md) to deploy it in the cloud or change it.
+[developers.md](developers.md) to deploy it in the cloud, or to [develop it locally](developers.md#develop-locally-no-cloud-no-cost).
 
 ## Quick start (5 minutes)
 

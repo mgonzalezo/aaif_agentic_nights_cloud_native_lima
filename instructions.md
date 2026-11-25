@@ -145,7 +145,7 @@ inside WSL2, and on Linux the kind cluster reaches Ollama through your Docker br
 
 - The story, step by step: [README.md](README.md).
 - Run all of it as pods in the cloud (costs money until you delete it): [developers.md](developers.md).
-- Contribute, add a creature or an encounter: [CONTRIBUTING.md](CONTRIBUTING.md) and the "Extend it" section of [developers.md](developers.md).
+- Change the code, add a creature or an encounter: [Develop locally](developers.md#develop-locally-no-cloud-no-cost) and "Extend it" in [developers.md](developers.md), then [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Tested on Windows 11 with Windows Terminal, and inside a Linux container (the cloud demo's console pod). The Fedora and
 macOS commands use the official installers of uv, Ollama and Homebrew and are the same as on Linux: tell us if one breaks.

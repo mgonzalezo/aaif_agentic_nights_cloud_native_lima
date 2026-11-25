@@ -10,11 +10,43 @@ host, with nothing but a terminal on your laptop. Just want to play? That is [in
 > 200 GB disk and the public IPv4 address. A *stopped* instance still bills for its disk until the stack is deleted.
 > Read [section 6](#6-stop-paying) before you start, and schedule the teardown on day one.
 
+## Develop locally (no cloud, no cost)
+
+You can change and test almost everything on your own computer. The cloud is only needed to see the pods.
+Windows, macOS and Linux all work (the commands below are the same; install uv and git as in
+[instructions.md](instructions.md#1-install-and-run)).
+
+```bash
+git clone https://github.com/mgonzalezo/aaif_agentic_nights_cloud_native_lima.git
+cd aaif_agentic_nights_cloud_native_lima
+uv sync --all-extras           # Python 3.11 or newer (uv installs it), the game, the test tools and the optional extras
+uv run pytest -q               # about 90 seconds, no network, no model: the tests use tests/fake_model.py
+uv run bestiary doctor         # what you have, and what each missing piece would unlock
+uv run bestiary play --only 3  # one encounter by index (0 the lab, 1 to 10 the encounters, 11 the Kubernetes region)
+```
+
+| While you work on... | Run |
+|---|---|
+| Any code | `uv run pytest -q`, or one file: `uv run pytest tests/test_battle.py -q` |
+| An encounter | `uv run bestiary play --only 5`. Add `--auto` for no key presses, or `--replay-only` to never run anything live |
+| The battle screens | `uv run bestiary play --ui battle --only 5` in a terminal of at least 110 columns and 40 rows |
+| A creature or an obstacle (YAML) | The tests check every entry (fields present, screens fit in 110 columns). Look at it with `uv run bestiary sprites` or the battle screens |
+| The steps that use a model | Install Ollama or set `OPENAI_API_KEY` ([instructions.md](instructions.md#4-make-more-of-it-real-all-optional-one-piece-at-a-time)); `uv run bestiary doctor` confirms it |
+| The services | `uv run bestiary services` starts the forge MCP server on :8765 and the A2A reviewer on :9999. The game starts them itself when nothing listens there |
+| The recorded replays | `uv run bestiary record` runs every encounter live and saves `replays/` (only real runs are saved). Commit them on purpose |
+| How reliable a model step is | `uv run bestiary gate --runs 20` (needs a model; `--goose` adds goose and takes a long time) |
+| A real Kubernetes cluster, on your laptop | `uv run bestiary k8s up` (needs Docker, kind and kubectl), then `uv run bestiary play --only 11`, then `uv run bestiary k8s down` |
+
+Settings live in `.env` (copy [.env.example](.env.example); everything is optional). The default profile is `laptop`:
+everything on `127.0.0.1`. The `cloud` profile (in-cluster service URLs) is for the console pod. On Windows the `.sh`
+scripts need bash (Git Bash or WSL2); the `.ps1` twins do the same in PowerShell. Before you open a pull request, read
+[CONTRIBUTING.md](CONTRIBUTING.md) (sign off your commits with `git commit -s`).
+
 ## 1. Pick a path
 
 | Path | You need | Cost | Guide |
 |---|---|---|---|
-| **Laptop, no cloud** | Docker, [kind](https://kind.sigs.k8s.io), kubectl | 0 | [docs/SETUP.md](docs/SETUP.md), levels 2 and 3. `uv run bestiary k8s up` |
+| **Laptop, no cloud** | Just uv and git; add Docker, [kind](https://kind.sigs.k8s.io) and kubectl for a local cluster | 0 | [Develop locally](#develop-locally-no-cloud-no-cost) above, and [docs/SETUP.md](docs/SETUP.md) levels 2 and 3 |
 | **AWS, CPU instance** (tested) | An AWS account, AWS CLI v2, Session Manager plugin | about 1.5 USD/hour | this page |
 | **AWS, GPU instance** (written, never run) | The same, plus a G/VT vCPU quota of 8 (new accounts start at 0) | about 2.3 USD/hour | [docs/AWS_DEPLOY.md](docs/AWS_DEPLOY.md) |
 
