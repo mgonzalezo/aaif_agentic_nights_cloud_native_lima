@@ -1,0 +1,71 @@
+# Español (Latinoamérica) de los obstáculos. Se usa cuando BESTIARY_LANG=es; las llaves son las mismas que en obstacles.yaml.
+#   short:   una línea, en el menú donde eliges qué hacer
+#   what:    qué es este monstruo, en la historia
+#   problem: por qué es un problema si nadie lo resuelve
+#   hint:    la pista que aparece cuando mandas la criatura equivocada
+
+doubt:
+  short: "Nadie le dijo al agente cómo se construye y se prueba este repo."
+  what: "Una pregunta sin respuesta: \"¿Cómo corro las pruebas?\" El agente no sabe nada de este repositorio."
+  problem: "Sin instrucciones el agente adivina el comando, pierde tiempo y tokens, o corre lo equivocado."
+  hint: "Necesitas un archivo que el agente lea solo, con las reglas del repositorio."
+
+fog:
+  short: "El issue está atrapado dentro de un forge. ¿Cómo lo lee un agente?"
+  what: "Un issue que vive dentro de un forge de código. Para leerlo, el agente tiene que llamar a las herramientas del forge."
+  problem: "Sin un estándar, cada agente necesita pegamento a medida para cada herramienta: cada par es su propia integración."
+  hint: "Necesitas una forma estándar de que el agente use las herramientas del forge."
+
+injection:
+  short: "Un texto escondido en el issue dice: borra la rama main."
+  what: "Un texto escondido dentro del issue le dice a cualquier asistente que lo lea que ignore sus reglas y borre main."
+  problem: "Un modelo no distingue datos de órdenes. Si ve delete_branch, podría obedecer y destruir el repositorio."
+  hint: "Necesitas algo fuera del modelo que decida qué herramientas existen para él."
+
+ritual:
+  short: "Las reglas para contribuir son largas. Cargarlas todas es caro."
+  what: "El ritual del upstream: cómo contribuir (ramas, pruebas, reglas del pull request) está repartido en guías largas."
+  problem: "Cargar todas las guías en el contexto del modelo cuesta tokens en cada petición y entierra lo que importa."
+  hint: "Necesitas cargar el conocimiento solo cuando hace falta, no todo de una vez."
+
+bug:
+  short: "farolito se cae con un traceback cuando falta el archivo de configuración."
+  what: "El issue #7 de farolito, la app de la demo: al correrla con un archivo de configuración que no existe, imprime un traceback de Python."
+  problem: "La gente ve un error feo y los scripts reciben un código de salida equivocado. Debería explicar qué pasó y salir con código 2."
+  hint: "Necesitas al que decide y actúa: el único con turno propio."
+
+flaky:
+  short: "El código de un agente no es de confianza. ¿Dónde corren sus pruebas?"
+  what: "El cambio hay que probarlo, pero lo escribió un agente: código no confiable, y las pruebas pueden comportarse distinto en cada máquina."
+  problem: "Correrlo en tu propia máquina puede dañarla, y el resultado depende de esa máquina."
+  hint: "Necesitas un lugar aislado y desechable para correr código en el que no confías."
+
+review:
+  short: "Nadie revisó el cambio. El autor no puede revisarse solo."
+  what: "Un cambio que nadie revisó. El agente que lo escribió no debería ser el único en revisarlo."
+  problem: "Un agente que revisa su propio trabajo repite sus puntos ciegos. La segunda opinión debe venir del agente de otro equipo."
+  hint: "Necesitas que otro agente, de otro equipo, haga la revisión."
+
+gate:
+  short: "El arreglo debe llegar al repo como pull request, por la puerta."
+  what: "El pull request: el arreglo solo puede entrar al repositorio por una puerta controlada."
+  problem: "Si un agente pudiera empujar donde quisiera, podría dañar main. Cada llamada debe pasar reglas y quedar registrada."
+  hint: "Crear el pull request es una llamada a una herramienta del forge: ¿qué estándar describe las herramientas?"
+
+detour:
+  short: "El modelo principal se cayó (simulado). La petición necesita otra ruta."
+  what: "El modelo principal deja de responder. La caída es simulada en esta demo; el failover es real."
+  problem: "Si la app depende de un solo modelo, se detiene con él. La petición debe encontrar otra ruta por sí sola."
+  hint: "Las herramientas están bien: lo que falla es la ruta de las peticiones al modelo."
+
+dojo:
+  short: "Para mejorar a un agente necesitas un lugar donde practicar, con puntaje."
+  what: "Un muñeco de práctica: un problema que un agente puede intentar una y otra vez."
+  problem: "Para mejorar un modelo necesitas un lugar seguro donde practicar y un puntaje. Aquí las pruebas se vuelven una recompensa."
+  hint: "Necesitas un lugar donde practicar y recibir un puntaje (una recompensa)."
+
+cluster:
+  short: "Muchos equipos deben compartir las mismas herramientas, gateway y políticas."
+  what: "La región de Kubernetes: las mismas herramientas ahora tienen que servir a muchos equipos a la vez."
+  problem: "Una laptop es fácil. Muchos equipos que comparten herramientas, un gateway y reglas necesitan una plataforma: pods, namespaces, políticas."
+  hint: "Muchos equipos comparten las mismas herramientas, el mismo gateway y las mismas reglas: mira los pods."

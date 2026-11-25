@@ -1,0 +1,122 @@
+# Español (Latinoamérica) de los textos de cada criatura. Se mezcla sobre creatures.yaml cuando BESTIARY_LANG=es.
+# Solo cambian los textos que se muestran: los id, las estadísticas, las URLs y los nombres propios se quedan igual.
+# El orden de las habilidades es el mismo que en creatures.yaml (el juego las elige por posición).
+
+- id: mender
+  animal: mapache mecánico
+  joined_aaif: "2025-12-09 (proyecto fundador)"
+  tagline: "Agente de IA abierto que trabaja en tu terminal"
+  definition: "Un agente de IA de código abierto. Le das un objetivo con palabras simples; planea, elige herramientas, edita archivos y ejecuta comandos en tu máquina, con el modelo que tú elijas."
+  good_for: "Tareas reales sobre un código: arreglar un bug, cambiar un archivo, correr las pruebas y repetir hasta terminar."
+  weakness: "Solo es tan bueno como su modelo. Puede decir que terminó sin haber usado ninguna herramienta."
+  skills:
+    - {name: Planear, does: "Divide una tarea en pasos."}
+    - {name: Editar archivo, does: "Cambia código con la extensión de desarrollo."}
+    - {name: Ejecutar receta, does: "Repite un flujo guardado: goose run --recipe."}
+
+- id: octoplug
+  animal: pulpo con enchufes
+  joined_aaif: "2025-12-09 (proyecto fundador)"
+  tagline: "El estándar abierto que enchufa herramientas a las apps de IA"
+  definition: "Model Context Protocol: un estándar abierto para que una aplicación de IA le pregunte a un servidor qué puede hacer (herramientas, datos) y luego lo use."
+  good_for: "Escribir una herramienta una sola vez y que la use cualquier app compatible con MCP: issues, archivos, bases de datos, un forge."
+  weakness: "No actúa solo. Expone lo que el servidor ofrezca, sea bueno o malo."
+  skills:
+    - {name: tools/list, does: "Le pregunta a un servidor qué sabe hacer."}
+    - {name: tools/call, does: "Ejecuta una herramienta con argumentos JSON."}
+    - {name: Recursos, does: "Comparte archivos o datos con el modelo."}
+
+- id: chasqui
+  animal: corredor andino de relevos
+  joined_aaif: "2026-08-17"
+  tagline: "Cómo un agente le encarga una tarea al agente de otro equipo"
+  definition: "Agent2Agent: un protocolo abierto para que agentes hechos por equipos distintos se encuentren (con una Agent Card) y trabajen juntos en una tarea."
+  good_for: "Delegar trabajo a un agente especialista que no es tuyo, y seguir su avance hasta que termine."
+  weakness: "No sirve de nada con un solo agente."
+  skills:
+    - {name: Leer tarjeta, does: "Pide /.well-known/agent-card.json."}
+    - {name: Delegar, does: "Envía una tarea al agente de otro equipo."}
+    - {name: Esperar estado, does: "Sigue la tarea hasta que se completa."}
+
+- id: scribbit
+  animal: cuaderno vivo
+  joined_aaif: "2025-12-09 (proyecto fundador)"
+  tagline: "Un README para agentes de IA"
+  definition: "Un archivo Markdown en tu repositorio con lo que necesita saber un agente de código: cómo compilar, cómo probar, las reglas de la casa."
+  good_for: "Decirle lo mismo a todos los agentes una sola vez, en lugar de repetirlo en cada prompt."
+  weakness: "Un archivo largo cuesta tokens en cada petición. Mantenlo corto."
+  skills:
+    - {name: Cómo correr esto, does: "Le dice a cualquier agente el comando de pruebas."}
+    - {name: Reglas del repo, does: "Escribe una vez las reglas de la casa, para todos los agentes."}
+
+- id: satchel
+  animal: navaja suiza multiuso
+  joined_aaif: "2026-10-22"
+  tagline: "Carpetas de conocimiento que el agente carga solo cuando hacen falta"
+  definition: "Un formato abierto: una carpeta con un SKILL.md (y scripts o archivos opcionales). El agente lee solo el nombre y la descripción, y carga el resto cuando la tarea lo necesita."
+  good_for: "Compartir procedimientos reutilizables sin llenar la ventana de contexto del modelo."
+  weakness: "Necesita un agente que lo soporte. Los scripts incluidos son un riesgo para la cadena de suministro."
+  skills:
+    - {name: Descubrir, does: "El agente ve solo el nombre y la descripción."}
+    - {name: Activar, does: "Carga el SKILL.md completo cuando es relevante."}
+    - {name: Usar script, does: "Ejecuta un script auxiliar que viene con la skill."}
+
+- id: bulwark
+  animal: armadillo guardián
+  joined_aaif: "2026-06-04"
+  tagline: "Un portero entre los agentes y sus herramientas"
+  definition: "Un proxy de código abierto para el tráfico de agentes (MCP, A2A y llamadas a modelos). Todo pasa por él, así que las reglas viven en un solo lugar."
+  good_for: "Ocultar herramientas peligrosas, juntar varios servidores MCP en uno y registrar cada llamada."
+  weakness: "Un proceso más y más YAML. En Windows, por ahora usa WSL2."
+  skills:
+    - {name: Lista de permitidos, does: "Saca las herramientas prohibidas de tools/list."}
+    - {name: Federar, does: "Junta varios servidores MCP en uno."}
+    - {name: Observar, does: "Registra y rastrea cada llamada."}
+
+- id: switchy
+  animal: capibara operador de cambios
+  joined_aaif: "2026-09 (antes Envoy AI Gateway)"
+  tagline: "Manda cada petición al modelo por la mejor ruta"
+  definition: "Un router para el tráfico hacia modelos: un solo punto de entrada delante de muchos modelos y proveedores, con reglas de ruteo, failover y presupuestos de tokens."
+  good_for: "Que la aplicación siga viva cuando un modelo o proveedor falla, y mandar las peticiones baratas a los modelos baratos."
+  weakness: "Se solapa con Rondero en esta historia. aigw run solo existe para Linux y macOS."
+  skills:
+    - {name: Desviar, does: "Manda una petición a un modelo según una regla."}
+    - {name: Plan B, does: "Pasa a otro proveedor si el primero falla."}
+    - {name: Presupuesto, does: "Aplica cuotas de tokens por equipo."}
+
+- id: glyphstone
+  animal: guacamayo que repite todos los idiomas
+  joined_aaif: "2026-10-22"
+  tagline: "Una sola forma de hablar con cualquier proveedor de modelos"
+  definition: "Una especificación abierta de la API /v1/responses: peticiones y elementos de salida con tipo (mensajes, llamadas a funciones) que se ven igual en todos los proveedores."
+  good_for: "Cambiar de modelo o de proveedor sin reescribir tu agente."
+  weakness: "No es un servidor. Los servidores locales suelen soportar solo un subconjunto sin estado."
+  skills:
+    - {name: Lengua común, does: "POST /v1/responses funciona igual en todos los proveedores."}
+    - {name: Elementos, does: "La salida es una lista de elementos con tipo: message, function_call."}
+    - {name: Conformidad, does: "Una batería de pruebas verifica que los proveedores coincidan."}
+
+- id: glasshell
+  animal: tortuga de caparazón de vidrio
+  joined_aaif: "2026-10-22"
+  tagline: "Una caja desechable para correr código en el que no confías"
+  definition: "Una plataforma de sandboxes de código abierto: crea un contenedor aislado (en Docker o Kubernetes), ejecuta comandos adentro y luego lo destruye."
+  good_for: "Correr las pruebas del código escrito por una IA sin tocar la máquina real."
+  weakness: "Necesita Docker. Los arranques en frío son lentos."
+  skills:
+    - {name: Burbuja, does: "Crea un contenedor aislado."}
+    - {name: Ejecutar, does: "Corre pytest adentro."}
+    - {name: Descartar, does: "Destruye el sandbox al terminar."}
+
+- id: dojolotl
+  animal: ajolote en un dojo
+  joined_aaif: "2026-10-22"
+  tagline: "Un campo de entrenamiento para agentes, con puntaje"
+  definition: "Un framework de entornos con una interfaz simple de reset() y step() y una recompensa, para entrenar y evaluar agentes."
+  good_for: "Practicar y medir a un agente: pruebas que pasan, recompensa 1.0."
+  weakness: "No sirve para usar un asistente hoy; sirve para entrenar mejores. La API sigue cambiando."
+  skills:
+    - {name: reset(), does: "Empieza un episodio nuevo."}
+    - {name: step(), does: "Aplica una acción y devuelve una observación."}
+    - {name: Recompensa, does: "Pruebas que pasan = recompensa 1.0."}

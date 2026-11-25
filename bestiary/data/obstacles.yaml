@@ -2,59 +2,71 @@
 #   short:   one line, shown at the menu where you choose what to do
 #   what:    what this monster is, in the story
 #   problem: why it is a problem if nobody deals with it
+#   hint:    shown when you send the wrong creature (battle screens, you pick the creature)
 # Keep them true to what the encounter really does: the demo is the proof.
 
 doubt:
   short: "Nobody told the agent how to build and test this repo."
   what: "A question with no answer: \"How do I run the tests?\" The agent knows nothing about this repository."
   problem: "Without instructions an agent guesses the command, wastes time and tokens, or runs the wrong thing."
+  hint: "You need a file that the agent reads on its own, with the rules of the repository."
 
 fog:
   short: "The issue is trapped inside a forge. How does an agent read it?"
   what: "An issue that lives inside a code forge. To read it, an agent has to call the forge's tools."
   problem: "Without a standard, every agent needs custom glue for every tool: each pair is its own integration."
+  hint: "You need a standard way for the agent to use the tools of the forge."
 
 injection:
   short: "Hidden text in the issue says: delete the main branch."
   what: "Hidden text inside the issue tells any assistant that reads it to ignore its rules and delete main."
   problem: "A model cannot tell data from orders. If it can see delete_branch, it might obey and destroy the repository."
+  hint: "You need something outside the model that decides which tools exist for it."
 
 ritual:
   short: "The contribution rules are long. Loading them all is costly."
   what: "The upstream ritual: how to contribute (branches, tests, pull-request rules) is spread over long guides."
   problem: "Loading every guide into the model's context costs tokens on every request and buries what matters."
+  hint: "You need to load knowledge only when it is needed, not all of it at once."
 
 bug:
   short: "farolito crashes with a traceback when the config file is missing."
   what: "Issue #7 in farolito, the demo app: running it with a missing config file prints a Python traceback."
   problem: "People see an ugly crash and scripts get a wrong exit code. It should say what is wrong and exit with code 2."
+  hint: "You need the one that decides and acts: the only one with a turn of its own."
 
 flaky:
   short: "Code written by an agent is untrusted. Where do its tests run?"
   what: "The change must be tested, but it was written by an agent: untrusted code, and tests can behave differently on every machine."
   problem: "Running it on your own machine can damage it, and the result depends on that machine."
+  hint: "You need an isolated, disposable place to run code you do not trust."
 
 review:
   short: "Nobody has reviewed the change. The author cannot check itself."
   what: "A change nobody has reviewed. The agent that wrote it should not be the only one to check it."
   problem: "An agent that reviews its own work repeats its own blind spots. A second opinion must come from another team's agent."
+  hint: "You need another agent, from another team, to do the review."
 
 gate:
   short: "The fix must reach the repo as a pull request, through the gate."
   what: "The pull request: the fix may enter the repository only through a controlled door."
   problem: "If an agent could push anywhere it could damage main. Every call must pass rules and be logged."
+  hint: "Creating the pull request is a call to a tool of the forge: which standard describes tools?"
 
 detour:
   short: "The main model is down (simulated). The request needs another route."
   what: "The main model stops answering. The outage is simulated in this demo, the failover is real."
   problem: "If the app depends on one model it stops with it. The request must find another route by itself."
+  hint: "The tools are fine: what fails is the route of the requests to the model."
 
 dojo:
   short: "To improve an agent you need a place to practise, with a score."
   what: "A training dummy: a practice problem an agent can try again and again."
   problem: "To improve a model you need a safe place to practise and a score. Here the tests become a reward."
+  hint: "You need a place to practise and get a score (a reward)."
 
 cluster:
   short: "Many teams must share the same tools, gateway and policies."
   what: "The Kubernetes region: the same tools now have to serve many teams at once."
   problem: "One laptop is easy. Many teams sharing tools, a gateway and rules need a platform: pods, namespaces, policies."
+  hint: "Many teams share the same tools, gateway and rules: look at the pods."

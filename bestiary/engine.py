@@ -19,6 +19,8 @@ from rich.text import Text
 
 from bestiary import sprites
 from bestiary.config import REPLAY_DIR, Settings
+from bestiary.i18n import category_label, localized_yaml
+from bestiary.i18n import t as tr
 from bestiary.llm import Detection
 from bestiary.where import Where
 
@@ -42,7 +44,17 @@ CATEGORY_RULES = {
 
 
 def load_creatures() -> dict[str, dict]:
-    return {c["id"]: c for c in yaml.safe_load(DATA.read_text(encoding="utf-8"))}
+    """The ten creatures. In Spanish, creatures.es.yaml replaces the texts shown on screen (same ids, same skill order)."""
+    creatures = {c["id"]: c for c in yaml.safe_load(DATA.read_text(encoding="utf-8"))}
+    for item in localized_yaml("creatures") or []:
+        c = creatures[item["id"]]
+        for key, value in item.items():
+            if key == "skills":
+                for base, spanish in zip(c["skills"], value):
+                    base.update(spanish)
+            elif key != "id":
+                c[key] = value
+    return creatures
 
 
 class Fallback(Exception):
@@ -64,6 +76,8 @@ class Ctx:
     current_number: str | None = None  # encounter on screen (the battle UI needs it for the outcome)
     current_party: list[str] = field(default_factory=list)  # creatures of that encounter, lead first
     dex_seen: set[str] = field(default_factory=set)  # Pokedex entries already read (battle UI)
+    chosen: str | None = None  # the creature on the field for this encounter (battle UI, when you pick it)
+    sent_out: str | None = None  # the creature whose card was already shown on the field
     _pending_live: bool = False
 
     def _flush_badge(self) -> None:
@@ -74,6 +88,7 @@ class Ctx:
     # ---------- output helpers ----------
     def say(self, text: str, style: str = "") -> None:
         self._flush_badge()
+        text = tr(text)
         self.console.print(Text(text, style=style) if style else text)
 
     def wire(self, kind: str, data: Any) -> None:
@@ -82,15 +97,15 @@ class Ctx:
         self.events.append({"kind": kind, "data": data})
         body = data if isinstance(data, str) else json.dumps(data, indent=2, ensure_ascii=False)
         if len(body) > 1400:
-            body = body[:1400] + "\n... (truncated)"
+            body = body[:1400] + "\n... " + tr("(truncated)")
         lexer = "text" if isinstance(data, str) else "json"
         self.console.print(
-            Panel(Syntax(body, lexer, theme="ansi_dark", word_wrap=True), title=f"[dim]{kind}[/]", border_style="dim")
+            Panel(Syntax(body, lexer, theme="ansi_dark", word_wrap=True), title=f"[dim]{tr(kind)}[/]", border_style="dim")
         )
 
     def code(self, source: str, title: str, lexer: str = "python") -> None:
         self._flush_badge()
-        self.console.print(Panel(Syntax(source, lexer, theme="ansi_dark", line_numbers=True), title=title))
+        self.console.print(Panel(Syntax(source, lexer, theme="ansi_dark", line_numbers=True), title=tr(title)))
 
     def pause(self, prompt: str = "Enter to continue") -> str:
         if self.auto:
@@ -101,7 +116,7 @@ class Ctx:
             if battle.interactive(self):
                 battle.wait(self)
                 return ""
-        return self.console.input(f"[dim]{prompt} > [/]").strip().lower()
+        return self.console.input(f"[dim]{tr(prompt)} > [/]").strip().lower()
 
     # ---------- live / replay ----------
     def attempt(self, encounter_id: str, live: Callable[[], Any], didactic: Callable[[], Any] | None = None) -> str:
@@ -124,6 +139,7 @@ class Ctx:
             from bestiary import battle
 
             if battle.enabled(self):
+                battle.send_out(self, encounter_id)   # when you picked the creature: its card enters the field
                 battle.move_used(self, encounter_id)
         if not self.replay_only and choice != "r":
             try:
@@ -137,20 +153,20 @@ class Ctx:
                 return "LIVE"
             except Fallback as why:
                 self._pending_live = False
-                self.console.print(f"[dim]live step not available: {why}[/]")
+                self.console.print(f"[dim]{tr('live step not available:')} {why}[/]")
             except Exception as err:  # never crash on stage
                 self._pending_live = False
-                self.console.print(f"[red]live step failed: {type(err).__name__}: {err}[/]")
+                self.console.print(f"[red]{tr('live step failed:')} {type(err).__name__}: {err}[/]")
         replay = load_replay(encounter_id)
         if replay:
             self.badge = "REPLAY"
-            self.show_badge("REPLAY", f"recorded {replay['recorded_at']} with {replay.get('model') or 'no model'}")
+            self.show_badge("REPLAY", tr("recorded {at} with {model}", at=replay["recorded_at"], model=replay.get("model") or tr("no model")))
             for ev in replay["events"]:
                 self.wire(ev["kind"], ev["data"])
             return "REPLAY"
         if didactic:
             self.badge = "DIDACTIC"
-            self.show_badge("DIDACTIC", "simulated explanation, not a real run")
+            self.show_badge("DIDACTIC", tr("simulated explanation, not a real run"))
             didactic()
             return "DIDACTIC"
         self.say("No replay recorded yet. Record one with: uv run bestiary record", "yellow")
@@ -178,13 +194,13 @@ def creature_card(c: dict, scale: int = 1, where: str = "") -> Panel:
     lines = Text()
     lines.append(f"{c['name']}", style="bold")
     lines.append(f"  ({c['animal']})\n", style="dim")
-    lines.append(f"stands for: {c['project']}\n", style="cyan")
-    lines.append(f"{c['category']}\n", style="bold magenta")
+    lines.append(f"{tr('stands for:')} {c['project']}\n", style="cyan")
+    lines.append(f"{category_label(c['category'])}\n", style="bold magenta")
     for key in ("autonomy", "reach", "control", "startup"):
         v = stats[key]
-        lines.append(f"{key:<9}{'#' * v}{'.' * (5 - v)} {v}\n")
+        lines.append(f"{tr(key):<9}{'#' * v}{'.' * (5 - v)} {v}\n")
     if where:
-        lines.append("runs on: ", style="dim")
+        lines.append(f"{tr('runs on:')} ", style="dim")
         lines.append(where, style="cyan")
     return Panel(Group(sprites.render(c["id"], scale), lines), width=34, border_style="grey50")
 
@@ -192,25 +208,28 @@ def creature_card(c: dict, scale: int = 1, where: str = "") -> Panel:
 def encounter_header(ctx: Ctx, number: str, title: str, step: str, creature_ids: list[str]) -> None:
     ctx.current_number = number
     ctx.current_party = list(creature_ids)
+    ctx.chosen = None
+    ctx.sent_out = None
     if ctx.settings.ui == "battle":
         from bestiary import battle
 
         if battle.enabled(ctx):
             battle.intro(ctx, number, title, step, creature_ids)
             return
-    ctx.console.rule(f"[bold]Encounter {number}: {title}")
-    ctx.say(f"Workflow step: {step}", "italic")
+    ctx.console.rule(f"[bold]{tr('Encounter {n}: {title}', n=number, title=tr(title))}")
+    ctx.say(tr("Workflow step: {step}", step=tr(step)), "italic")
     ctx.console.print(Columns([creature_card(ctx.creatures[i], where=ctx.where.describe(i)) for i in creature_ids]))
 
 
 def team_table(creatures: dict[str, dict], highlight: str | None = None) -> Table:
-    t = Table(title="Los Faroleros", show_lines=False)
+    table = Table(title="Los Faroleros", show_lines=False)
     for col in ("Creature", "Stands for", "Category", "Autonomy", "Reach", "Control", "Startup"):
-        t.add_column(col, style="bold yellow" if col.lower() == highlight else None)
+        table.add_column(tr(col), style="bold yellow" if col.lower() == highlight else None)
     for c in creatures.values():
         s = c["stats"]
-        t.add_row(c["name"], c["project"], c["category"], str(s["autonomy"]), str(s["reach"]), str(s["control"]), str(s["startup"]))
-    return t
+        table.add_row(c["name"], c["project"], category_label(c["category"]),
+                      str(s["autonomy"]), str(s["reach"]), str(s["control"]), str(s["startup"]))
+    return table
 
 
 # ---------- replays ----------

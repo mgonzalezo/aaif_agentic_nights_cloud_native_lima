@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bestiary.i18n import t as tr
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # BESTIARY_STATE_DIR lets a Kubernetes pod put the working copy on a volume shared by
 # the game, the forge MCP server and goose (an emptyDir). Default: .bestiary in the repo.
@@ -54,6 +56,7 @@ class Settings:
     # Model provider: auto | ollama | openai | none
     profile: str = field(default_factory=profile)
     ui: str = field(default_factory=lambda: _env("BESTIARY_UI", "classic").lower())  # classic | battle
+    pick: str = field(default_factory=lambda: _env("BESTIARY_PICK", "choose").lower())  # battle screens: choose (you pick the creature) | auto (the right one is already on the field)
     provider: str = field(default_factory=lambda: _env("BESTIARY_PROVIDER", "auto"))
     ollama_host: str = field(default_factory=lambda: _env("OLLAMA_HOST", _by_profile("http://localhost:11434", "http://ollama:11434")))
     ollama_model: str = field(default_factory=lambda: _env("BESTIARY_MODEL", "qwen3.5:9b"))
@@ -84,7 +87,7 @@ class Settings:
     goose_timeout: int = field(default_factory=lambda: int(_env("BESTIARY_GOOSE_TIMEOUT", "150")))
     goose_attempts: int = field(default_factory=lambda: int(_env("BESTIARY_GOOSE_ATTEMPTS", "2")))  # live attempts before the known-good fix
     llm_timeout: int = field(default_factory=lambda: int(_env("BESTIARY_LLM_TIMEOUT", "60")))
-    talk_banner: str = field(default_factory=lambda: _env("BESTIARY_TALK_BANNER", "Talk version: Agentic Nights Lima, Nov 2026"))
+    talk_banner: str = field(default_factory=lambda: _env("BESTIARY_TALK_BANNER", tr("Talk version: Agentic Nights Lima, Nov 2026")))
 
     @property
     def forge_url(self) -> str:

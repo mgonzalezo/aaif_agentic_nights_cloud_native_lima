@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from bestiary.config import Settings, settings
+from bestiary.i18n import t as tr
 
 # creature id -> (where it lives, detail). "here" = a container in the console pod.
 # Anything else is the `app` label of the pod that serves the creature.
@@ -67,7 +68,7 @@ class Where:
     def _here(self) -> str:
         pod = os.environ.get("POD_NAME") or socket.gethostname()
         node = os.environ.get("NODE_NAME")
-        return f"pod/{pod}" + (f" on node {node}" if node else "")
+        return f"pod/{pod}" + (f" {tr('on node')} {node}" if node else "")
 
     def _pod_of(self, app: str) -> str:
         """Pod name and node of the pod behind `app=<label>`; the service name if kubectl cannot say."""
@@ -79,7 +80,7 @@ class Where:
                 "-o", r"jsonpath={.items[0].metadata.name} {.items[0].spec.nodeName}",
             ])
             name, _, node = out.partition(" ")
-            text = f"pod/{name}" + (f" on node {node}" if node else "") if name else f"svc/{app}"
+            text = f"pod/{name}" + (f" {tr('on node')} {node}" if node else "") if name else f"svc/{app}"
         except (OSError, RuntimeError, subprocess.SubprocessError):
             text = f"svc/{app}"
         self._cache[app] = text
@@ -88,13 +89,14 @@ class Where:
     def describe(self, creature_id: str) -> str:
         """One short line: where the creature runs."""
         if not self.settings.is_cloud:
-            detail = LAPTOP_DETAIL.get(creature_id, "local process")
-            return f"host {socket.gethostname()}: {detail}"
+            detail = tr(LAPTOP_DETAIL.get(creature_id, "local process"))
+            return f"{tr('host')} {socket.gethostname()}: {detail}"
         place, detail = PLACEMENT.get(creature_id, ("here", "console pod"))
+        detail = tr(detail)
         if place == "here":
             base = self._here()
         elif place.startswith("static:"):
-            base = place.removeprefix("static:")
+            base = tr(place.removeprefix("static:"))
         else:
             base = self._pod_of(place)
         if creature_id == "glyphstone":

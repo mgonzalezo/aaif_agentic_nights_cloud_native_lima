@@ -56,3 +56,9 @@ def isolated_replays(tmp_path, monkeypatch):
     import bestiary.engine as engine
 
     monkeypatch.setattr(engine, "REPLAY_DIR", tmp_path / "replays")
+
+
+@pytest.fixture(autouse=True)
+def english_texts(monkeypatch):
+    """The game writes Spanish by default; most tests check the English texts. Tests of the Spanish texts set es themselves."""
+    monkeypatch.setenv("BESTIARY_LANG", "en")

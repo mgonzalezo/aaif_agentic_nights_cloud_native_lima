@@ -24,6 +24,8 @@ from datetime import timedelta
 from rich.table import Table
 
 from bestiary import workspace
+from bestiary.i18n import category_label
+from bestiary.i18n import t as tr
 from bestiary.config import REPO_ROOT, WORK_DIR
 from bestiary.engine import CATEGORY_RULES, Ctx, Fallback, encounter_header, team_table
 from bestiary.services import port_open
@@ -97,16 +99,16 @@ def e0_lab(ctx: Ctx) -> None:
 
         if battle.enabled(ctx):
             battle.title_screen(ctx)
-    ctx.console.rule("[bold]Encounter 0: The lab")
+    ctx.console.rule("[bold]" + tr("Encounter 0: The lab"))
     ctx.say("Meet the team. Ten creatures, each one stands for one AAIF project.")
     ctx.console.print(team_table(ctx.creatures, highlight="autonomy"))
     ctx.say("Look at the Autonomy column: only Chambero (goose) is above 0.", "bold yellow")
     ctx.say("Only an AGENT decides. Everything else is a protocol, a format, a gateway, a spec, a box or a dojo.")
-    rules = Table(title="Category rules")
-    rules.add_column("Category")
-    rules.add_column("Rule in the game")
+    rules = Table(title=tr("Category rules"))
+    rules.add_column(tr("Category"))
+    rules.add_column(tr("Rule in the game"))
     for k, v in CATEGORY_RULES.items():
-        rules.add_row(k, v)
+        rules.add_row(category_label(k), tr(v))
     ctx.console.print(rules)
     ctx.pause()
 
@@ -118,7 +120,7 @@ def e1_doubt(ctx: Ctx) -> None:
     def live():
         text = (WORK_DIR / "AGENTS.md").read_text(encoding="utf-8")
         ctx.wire("farolito/AGENTS.md", text)
-        ctx.say(f"Aura loaded: {_tokens(text)} tokens, sent with every request. It is just a Markdown file.", "green")
+        ctx.say(tr("Aura loaded: {n} tokens, sent with every request. It is just a Markdown file.", n=_tokens(text)), "green")
         ctx.say("goose reads AGENTS.md by default. So do many other coding agents.")
 
     ctx.attempt("e1_doubt", live)
@@ -150,8 +152,8 @@ def e2_issue(ctx: Ctx) -> None:
 
     def live_agent():
         if not ctx.detection.provider:
-            raise Fallback("no model: " + "; ".join(ctx.detection.notes))
-        ctx.say(f"Model: {ctx.detection.provider.label()} through /v1/responses (Open Responses)", "dim")
+            raise Fallback(tr("no model: {notes}", notes="; ".join(ctx.detection.notes)))
+        ctx.say(tr("Model: {model} through /v1/responses (Open Responses)", model=ctx.detection.provider.label()), "dim")
         answer = _run(
             minimal_agent.run(
                 f"Read issue {n} and summarise the bug in one sentence.",
@@ -160,7 +162,7 @@ def e2_issue(ctx: Ctx) -> None:
                 ctx.wire,
             )
         )
-        ctx.say(f"Agent: {answer}", "bold green")
+        ctx.say(tr("Agent: {answer}", answer=answer), "bold green")
 
     ctx.attempt("e2b_minimal_agent", live_agent)
     ctx.say("The loop is the agent. MCP only described the tools.", "yellow")
@@ -179,7 +181,7 @@ def e3_injection(ctx: Ctx) -> None:
 
     def live():
         if not _gateway_up(ctx):
-            raise Fallback(f"agentgateway not reachable at {ctx.settings.gateway_url} (run: agentgateway -f gateway/agentgateway.yaml)")
+            raise Fallback(tr("agentgateway not reachable at {url} (run: agentgateway -f gateway/agentgateway.yaml)", url=ctx.settings.gateway_url))
         direct = _run(_mcp_list(ctx.settings.forge_url))
         ctx.wire("tools/list WITHOUT the gateway", direct)
         via = _run(_mcp_list(ctx.settings.gateway_url))
@@ -211,9 +213,9 @@ def e4_ritual(ctx: Ctx) -> None:
     def live():
         skills_dir = WORK_DIR / ".agents" / "skills"
         full, discovery = 0, 0
-        table = Table(title="Skills in farolito/.agents/skills")
+        table = Table(title=tr("Skills in farolito/.agents/skills"))
         for col in ("Skill", "Description (always loaded)", "Full SKILL.md"):
-            table.add_column(col)
+            table.add_column(tr(col))
         rows = []
         for skill in sorted(skills_dir.glob("*/SKILL.md")):
             text = skill.read_text(encoding="utf-8")
@@ -288,9 +290,9 @@ def e5_bug(ctx: Ctx) -> None:
         goose = shutil.which("goose")
         p = ctx.detection.provider
         if not goose:
-            raise Fallback("goose CLI not installed")
+            raise Fallback(tr("goose CLI not installed"))
         if not p:
-            raise Fallback("no model for goose")
+            raise Fallback(tr("no model for goose"))
         _, text = _run(_mcp_call(ctx.settings.forge_url, "read_issue", {"number": n}))
         issue = json.loads(text)
         prompt = goose_prompt(n, issue)
@@ -302,22 +304,22 @@ def e5_bug(ctx: Ctx) -> None:
         custom = os.environ.get("BESTIARY_GOOSE_CMD")  # e.g. "goose run --with-builtin developer -t"
         cmd = (shlex.split(custom) if custom else [goose, "run", "--no-session", "--with-builtin", "developer", "--text"]) + [prompt]
         attempts = max(1, ctx.settings.goose_attempts)
-        last = "goose did not run"
+        last = tr("goose did not run")
         for attempt in range(1, attempts + 1):
             if attempt > 1:
                 # Still LIVE: start again from the original code (the first change did not fix the bug).
-                ctx.say(f"The change did not fix the bug. Attempt {attempt} of {attempts}, from the original code.", "yellow")
+                ctx.say(tr("The change did not fix the bug. Attempt {attempt} of {attempts}, from the original code.", attempt=attempt, attempts=attempts), "yellow")
                 workspace.reset()
                 ctx.events.clear()
             ctx.wire("command", " ".join(cmd[:-1]) + f' "<issue prompt>"   (attempt {attempt} of {attempts})')
             code, out = _stream(cmd, WORK_DIR, env, ctx.settings.goose_timeout, ctx)
             ctx.events.append({"kind": "goose output (last lines)", "data": "\n".join(out[-25:])})
             if code is None:
-                last = f"goose passed the {ctx.settings.goose_timeout}s stage cap"
+                last = tr("goose passed the {seconds}s stage cap", seconds=ctx.settings.goose_timeout)
                 continue
             diff = workspace.unified_diff()
             if not diff:
-                last = "goose finished but changed nothing (a silent failure: the model never called a tool)"
+                last = tr("goose finished but changed nothing (a silent failure: the model never called a tool)")
                 continue
             ctx.wire("Diff written by goose", diff)
             # LIVE only if the change really fixes the bug: the same check the reliability gate uses.
@@ -327,8 +329,8 @@ def e5_bug(ctx: Ctx) -> None:
             ctx.wire("pytest on goose's change", {"passed": check.returncode == 0, "summary": tail})
             if check.returncode == 0:
                 return
-            last = f"goose changed the code but the tests still fail ({tail})"
-        raise Fallback(f"{last}; gave up after {attempts} attempt(s)")
+            last = tr("goose changed the code but the tests still fail ({tail})", tail=tail)
+        raise Fallback(tr("{last}; gave up after {attempts} attempt(s)", last=last, attempts=attempts))
 
     status = ctx.attempt("e5_goose", live)
     if status != "LIVE" or not workspace.unified_diff():
@@ -370,10 +372,10 @@ def e6_tests(ctx: Ctx) -> None:
         try:
             import opensandbox  # noqa: F401
         except ImportError as err:
-            raise Fallback("opensandbox SDK not installed (uv sync --extra sandbox)") from err
+            raise Fallback(tr("opensandbox SDK not installed (uv sync --extra sandbox)")) from err
         host, _, port = ctx.settings.sandbox_domain.partition(":")
         if not port_open(int(port or 80), host.replace("localhost", "127.0.0.1")):
-            raise Fallback(f"OpenSandbox server not reachable at {ctx.settings.sandbox_domain}")
+            raise Fallback(tr("OpenSandbox server not reachable at {url}", url=ctx.settings.sandbox_domain))
         image = os.environ.get("BESTIARY_SANDBOX_IMAGE", "bestiary-sandbox:latest")
         ctx.wire("sandbox", {"server": ctx.settings.sandbox_domain, "image": image, "command": SANDBOX_CMD})
         out = _run(_sandbox_pytest(ctx.settings.sandbox_domain, image))
@@ -415,7 +417,7 @@ def e7_review(ctx: Ctx) -> None:
 
     def live():
         if not ctx.detection.provider:
-            raise Fallback("no model for the reviewer")
+            raise Fallback(tr("no model for the reviewer"))
         card, replies = _run(_a2a_review(ctx.settings.reviewer_url, workspace.unified_diff()))
         ctx.wire("A2A Agent Card (/.well-known/agent-card.json)", card)
         for reply in replies:
@@ -451,7 +453,7 @@ def e8_pr(ctx: Ctx) -> None:
         if err:
             raise Fallback(out[:300])
         ctx.wire("Pull request", json.loads(out))
-        ctx.say(f"Backend: {ctx.settings.forge_backend}. goose never held this tool.", "bold green")
+        ctx.say(tr("Backend: {backend}. goose never held this tool.", backend=ctx.settings.forge_backend), "bold green")
 
     ctx.attempt("e8_pr", live)
     ctx.pause()
@@ -465,7 +467,7 @@ def _kube(args: list[str]) -> str:
     """kubectl through the console's service account. Raises Fallback if it cannot run."""
     kubectl = shutil.which("kubectl")
     if not kubectl:
-        raise Fallback("kubectl not installed")
+        raise Fallback(tr("kubectl not installed"))
     r = subprocess.run([kubectl, *args], capture_output=True, text=True, timeout=20)
     if r.returncode != 0:
         raise Fallback(f"kubectl {' '.join(args[:3])}: {r.stderr.strip()[:200]}")
@@ -484,9 +486,9 @@ def _router_call(ctx: Ctx, model: str) -> dict:
     try:
         r = httpx.post(f"{base}/v1/responses", json=body, timeout=180)
     except httpx.TransportError as err:
-        raise Fallback(f"Agent Router not reachable at {base}: {type(err).__name__}") from err
+        raise Fallback(tr("Agent Router not reachable at {url}: {error}", url=base, error=type(err).__name__)) from err
     if r.status_code != 200:
-        raise Fallback(f"Agent Router answered {r.status_code}: {r.text[:160]}")
+        raise Fallback(tr("Agent Router answered {code}: {text}", code=r.status_code, text=r.text[:160]))
     data = r.json()
     return {
         "http_status": r.status_code,
@@ -532,23 +534,23 @@ def e9_detour(ctx: Ctx) -> None:
     compare = Table()
     for col in ("", "Rondero (agentgateway)", "Cobrador (Agent Router)"):
         compare.add_column(col)
-    compare.add_row("Main door", "Agents to tools and agents (MCP, A2A)", "Apps to models (OpenAI-compatible API)")
-    compare.add_row("Guards", "TOOLS: hides delete_branch", "MODELS: routes and fails over")
-    compare.add_row("Built on", "Rust proxy", "Envoy (formerly Envoy AI Gateway, a CNCF Envoy sub-project)")
-    compare.add_row("In this story", "Hides delete_branch", "Sends a request to the main model; if it is down, to the small one")
+    compare.add_row(tr("Main door"), tr("Agents to tools and agents (MCP, A2A)"), tr("Apps to models (OpenAI-compatible API)"))
+    compare.add_row(tr("Guards"), tr("TOOLS: hides delete_branch"), tr("MODELS: routes and fails over"))
+    compare.add_row(tr("Built on"), tr("Rust proxy"), tr("Envoy (formerly Envoy AI Gateway, a CNCF Envoy sub-project)"))
+    compare.add_row(tr("In this story"), tr("Hides delete_branch"), tr("Sends a request to the main model; if it is down, to the small one"))
     ctx.console.print(compare)
 
     main_model, small_model = ctx.settings.ollama_model, ctx.settings.failover_model
 
     def live():
         if not ctx.settings.is_cloud:
-            raise Fallback("Agent Router runs in the cluster (BESTIARY_PROFILE=cloud)")
+            raise Fallback(tr("Agent Router runs in the cluster (BESTIARY_PROFILE=cloud)"))
         ns, svc = ctx.settings.namespace, "ollama-main"
         ctx.wire("Step 1: request through Agent Router, main model", {"POST": f"{ctx.settings.agent_router_url}/v1/responses", "model": main_model})
         first = _router_call(ctx, main_model)
         ctx.wire("Response", first)
         _router_metrics(ctx)
-        ctx.say(f"Step 2: simulate an outage. Service {svc} loses its endpoints (one GPU, one Ollama pod: a simulated failure).", "yellow")
+        ctx.say(tr("Step 2: simulate an outage. Service {svc} loses its endpoints (one GPU, one Ollama pod: a simulated failure).", svc=svc), "yellow")
 
         def patch(selector: str) -> str:
             return _kube(["-n", ns, "patch", "svc", svc, "--type", "merge", "-p", json.dumps({"spec": {"selector": {"app": selector}}})])
@@ -562,12 +564,12 @@ def e9_detour(ctx: Ctx) -> None:
             _router_metrics(ctx)
         finally:
             patch("ollama")
-            ctx.say(f"Service {svc} restored.", "dim")
+            ctx.say(tr("Service {svc} restored.", svc=svc), "dim")
         served = second.get("served_by_model")
         if not served or served == first.get("served_by_model"):
             # Never claim a failover that did not happen: this live step does not count (no replay is recorded).
-            raise Fallback(f"no failover observed: the router answered with {served} both times")
-        ctx.say(f"Failover: asked for {main_model}, answered by {served}. The app never changed its URL.", "bold green")
+            raise Fallback(tr("no failover observed: the router answered with {served} both times", served=served))
+        ctx.say(tr("Failover: asked for {asked}, answered by {served}. The app never changed its URL.", asked=main_model, served=served), "bold green")
 
     def didactic():
         cfg = (REPO_ROOT / "agent-router" / "README.md").read_text(encoding="utf-8")
@@ -587,7 +589,7 @@ def e10_dojo(ctx: Ctx) -> None:
 
         base = ctx.settings.openenv_url.rstrip("/")
         if not base:
-            raise Fallback("no OpenEnv server configured (BESTIARY_OPENENV_URL; the cloud profile sets it)")
+            raise Fallback(tr("no OpenEnv server configured (BESTIARY_OPENENV_URL; the cloud profile sets it)"))
         try:
             ctx.wire(f"GET {base}/health", httpx.get(f"{base}/health", timeout=5).json())
             ctx.wire("POST /reset   (env.reset())", httpx.post(f"{base}/reset", json={}, timeout=15).json())
@@ -595,9 +597,9 @@ def e10_dojo(ctx: Ctx) -> None:
             ctx.wire("POST /step   (env.step: the farolito/cli.py left by encounter 5)", {"action": {"cli_py": f"<{len(cli_py)} characters>"}})
             step = httpx.post(f"{base}/step", json={"action": {"cli_py": cli_py}}, timeout=90).json()
         except httpx.TransportError as err:
-            raise Fallback(f"OpenEnv server not reachable at {base}: {type(err).__name__}") from err
+            raise Fallback(tr("OpenEnv server not reachable at {url}: {error}", url=base, error=type(err).__name__)) from err
         ctx.wire("step result: observation, reward, done", step)
-        ctx.say(f"reward = {step.get('reward')}: the environment ran farolito's tests in its own container.", "bold green")
+        ctx.say(tr("reward = {reward}: the environment ran farolito's tests in its own container.", reward=step.get("reward")), "bold green")
 
     def didactic():
         r = subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=WORK_DIR, capture_output=True, text=True, timeout=60)
@@ -628,12 +630,12 @@ def ek_kubernetes(ctx: Ctx) -> None:
     if battle.enabled(ctx):
         battle.intro(ctx, "K8s", "Kubernetes region", "Share it with many teams", ["bulwark"])
     else:
-        ctx.console.rule("[bold]Region: Kubernetes")
+        ctx.console.rule("[bold]" + tr("Region: Kubernetes"))
     cloud = ctx.settings.is_cloud
     ns = ctx.settings.namespace
     if cloud:
         ctx.say("Myth 3: do I need Kubernetes to start? No. But you are looking at it: this game runs in a pod.", "bold yellow")
-        ctx.say(f"I am {ctx.where._here()}. Everything before this also ran here, as pods.")
+        ctx.say(tr("I am {where}. Everything before this also ran here, as pods.", where=ctx.where._here()))
         k8s_url = ctx.settings.gateway_url  # the agentgateway sidecar of this pod
     else:
         ctx.say("Myth 3: do I need Kubernetes to start? No. Everything so far ran on this laptop.", "bold yellow")
@@ -643,10 +645,10 @@ def ek_kubernetes(ctx: Ctx) -> None:
     def live():
         kubectl = shutil.which("kubectl")
         if not kubectl:
-            raise Fallback("kubectl not installed")
+            raise Fallback(tr("kubectl not installed"))
         r = subprocess.run([kubectl, "get", "pods", "-n", ns, "-o", "wide"], capture_output=True, text=True, timeout=15)
         if r.returncode != 0:
-            hint = r.stderr.strip()[:200] if cloud else "no 'bestiary' namespace (run: uv run bestiary k8s up)"
+            hint = r.stderr.strip()[:200] if cloud else tr("no 'bestiary' namespace (run: uv run bestiary k8s up)")
             raise Fallback(hint)
         ctx.wire(f"kubectl get pods -n {ns} -o wide", r.stdout)
         if cloud and ctx.settings.accelerator == "gpu":
@@ -655,8 +657,8 @@ def ek_kubernetes(ctx: Ctx) -> None:
         via = "the agentgateway sidecar of this pod" if cloud else "agentgateway running in kind"
         ctx.wire(f"tools/list through {via}", _run(_mcp_list(k8s_url)))
         if cloud:
-            where_model = "the GPU" if ctx.settings.accelerator == "gpu" else "the CPU"
-            ctx.say(f"The model runs on {where_model} in its own pod. The gateway filters tools next to the game.", "bold green")
+            where_model = tr("the GPU") if ctx.settings.accelerator == "gpu" else tr("the CPU")
+            ctx.say(tr("The model runs on {where} in its own pod. The gateway filters tools next to the game.", where=where_model), "bold green")
         else:
             ctx.say("Same creatures, same YAML ideas, now as pods. Ollama still runs on the host.", "bold green")
 
@@ -669,16 +671,16 @@ def ek_kubernetes(ctx: Ctx) -> None:
 
 
 def finale(ctx: Ctx) -> None:
-    ctx.console.rule("[bold]The map")
-    t = Table(title="Agent, protocol, instruction format, gateway (and friends)")
-    t.add_column("Category")
-    t.add_column("Projects")
+    ctx.console.rule("[bold]" + tr("The map"))
+    table = Table(title=tr("Agent, protocol, instruction format, gateway (and friends)"))
+    table.add_column(tr("Category"))
+    table.add_column(tr("Projects"))
     groups: dict[str, list[str]] = {}
     for c in ctx.creatures.values():
         groups.setdefault(c["category"], []).append(f"{c['project']} ({c['name']})")
     for cat in CATEGORY_RULES:
-        t.add_row(cat, ", ".join(groups.get(cat, [])))
-    ctx.console.print(t)
+        table.add_row(category_label(cat), ", ".join(groups.get(cat, [])))
+    ctx.console.print(table)
     ctx.say("Unofficial personal project. Not endorsed by the AAIF or the Linux Foundation.", "dim")
     ctx.say(ctx.settings.talk_banner, "dim")
 

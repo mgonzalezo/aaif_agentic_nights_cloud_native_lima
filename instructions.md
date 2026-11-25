@@ -67,23 +67,28 @@ get the classic ones.
 | | Command | Keys |
 |---|---|---|
 | **Classic** (default) | `uv run bestiary` | **Enter** runs the step live, **r** shows a recorded replay, **s** skips |
-| **Battle screens** (Pokémon style) | `uv run bestiary play --ui battle` | **← ↑ ↓ →** move, **Enter** chooses |
+| **Battle screens** (Pokémon style, you choose the creature) | `uv run bestiary play --ui battle` | **← ↑ ↓ →** move, **Enter** chooses |
 
-In the battle screens every encounter is a fight between one of your creatures and an obstacle of the story:
+In the battle screens every encounter is a fight between an obstacle of the story and **the creature you choose**:
 
 ```
-  ▶ POKÉDEX      FIGHT
-    REPLAY       RUN
+  ▶ LUCHAR        CRIATURAS
+    POKÉDEX       REPETICIÓN
+    HUIR
 ```
 
-- **POKÉDEX**: what the project is, what it is good for and its weakness. With a team, **← →** flips between the creatures.
-- **FIGHT**: runs the step for real (badge **LIVE**).
-- **REPLAY**: shows a real recording of the step, with its date (badge **REPLAY**).
-- **RUN**: skips the step.
+- **CRIATURAS** (CREATURES): the ten creatures, each with what it is good for and its weakness. Pick the one that solves the obstacle. A wrong choice runs nothing: the game says it is not very effective and gives you a hint.
+- **LUCHAR** (FIGHT): runs the step for real (badge **LIVE**), with the creature you sent out.
+- **POKÉDEX**: what any of the ten projects is, what it is good for and its weakness. **← →** flips through them.
+- **REPETICIÓN** (REPLAY): shows a real recording of the step, with its date (badge **REPLAY**).
+- **HUIR** (RUN): skips the step.
+
+The texts are in **Spanish** (Latin America) by default; `--lang en` gives English. `--pick auto` puts the right creature on the
+field from the start (the first version of the game), for when you want to go fast.
 
 The obstacle box tells you **what it is** and **why it is a problem**, and the creature carries the real name of its
 project (`CHAMBERO  goose`). Between screens, **Enter** or **→** continues. If your terminal does not send arrows the
-game understands, **W A S D** or **H J K L** move, **1 2 3 4** jump to a choice and **Tab** goes to the next one;
+game understands, **W A S D** or **H J K L** move, **1 2 3 4 5** jump to a choice and **Tab** goes to the next one;
 the menu names a key it did not recognise, and `uv run bestiary keytest` shows what each key sends.
 More in [docs/BATTLE_UI.md](docs/BATTLE_UI.md).
 

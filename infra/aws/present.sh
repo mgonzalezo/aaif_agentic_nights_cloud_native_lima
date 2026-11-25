@@ -18,8 +18,10 @@ while [ $# -gt 0 ]; do
     --host) MODE=host; shift ;;
     --logs) MODE=logs; shift ;;
     --battle) BATTLE=true; shift ;;
+    --pick) PICK=$2; shift 2 ;;     # choose (you pick the creature, default) | auto (the right one is on the field)
+    --lang) LANG_OPT=$2; shift 2 ;;  # es (default) | en
     --dry-run|--whatif) DRY=true; shift ;;
-    -h|--help) echo "Usage: $0 [--instance-id i-..] [--stack-name N] [--region R] [--profile P] [--doctor|--shell|--host|--logs] [--dry-run]"; exit 0 ;;
+    -h|--help) echo "Usage: $0 [--instance-id i-..] [--stack-name N] [--region R] [--profile P] [--doctor|--shell|--host|--logs] [--battle] [--pick choose|auto] [--lang es|en] [--dry-run]"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -29,7 +31,11 @@ command -v aws >/dev/null || { echo "aws CLI not found." >&2; exit 1; }
 # /etc/rancher/k3s/k3s.yaml is root-readable, so use `sudo k3s kubectl` (ssm-user has passwordless sudo).
 EXEC='sudo k3s kubectl -n bestiary exec -it deploy/console -c console --'
 case "$MODE" in
-  game) if [ "${BATTLE:-false}" = true ]; then REMOTE="$EXEC bestiary play --ui battle"; else REMOTE="$EXEC bestiary"; fi ;;
+  game)
+    EXTRA=""
+    [ -n "${PICK:-}" ] && EXTRA="$EXTRA --pick $PICK"
+    [ -n "${LANG_OPT:-}" ] && EXTRA="$EXTRA --lang $LANG_OPT"
+    if [ "${BATTLE:-false}" = true ]; then REMOTE="$EXEC bestiary play --ui battle$EXTRA"; else REMOTE="$EXEC bestiary play$EXTRA"; fi ;;
   doctor) REMOTE="$EXEC bestiary doctor" ;;
   shell) REMOTE="$EXEC bash" ;;
   logs) REMOTE='sudo tail -n 200 -F /var/log/bestiary-bootstrap.log' ;;

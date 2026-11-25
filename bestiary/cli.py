@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.table import Table
 
 from bestiary import workspace
+from bestiary.i18n import t as tr
 from bestiary.config import REPO_ROOT, settings
 from bestiary.engine import Ctx, load_creatures
 from bestiary.llm import detect
@@ -29,13 +30,17 @@ def cmd_play(args: argparse.Namespace) -> int:
 
     if getattr(args, "ui", None):
         os.environ["BESTIARY_UI"] = args.ui
+    if getattr(args, "pick", None):
+        os.environ["BESTIARY_PICK"] = args.pick
+    if getattr(args, "lang", None):
+        os.environ["BESTIARY_LANG"] = args.lang
     console = Console(force_terminal=None if not args.auto else True, width=args.width)
     if not args.no_reset:
         workspace.reset()
     ctx = _ctx(console, auto=args.auto, replay_only=args.replay_only, record=args.record)
     console.print(f"[bold]Agentic Bestiary[/]  [dim]{ctx.settings.talk_banner}[/]")
     p = ctx.detection.provider
-    console.print(f"[dim]model: {p.label() if p else 'none (replay mode for model steps)'}  forge: {ctx.settings.forge_backend}[/]")
+    console.print(f"[dim]{tr('model:')} {p.label() if p else tr('none (replay mode for model steps)')}  forge: {ctx.settings.forge_backend}[/]")
     steps = ORDER[args.start:] if args.only is None else [ORDER[args.only]]
     with running_services():
         for step in steps:
@@ -78,13 +83,13 @@ def _reachable(url: str) -> bool:
 def cmd_doctor(_: argparse.Namespace) -> int:
     s = settings()
     d = detect(s)
-    t = Table(title=f"bestiary doctor (profile: {s.profile})")
-    t.add_column("Check")
-    t.add_column("Status")
-    t.add_column("Unlocks")
+    t = Table(title=tr("bestiary doctor (profile: {profile})", profile=s.profile))
+    t.add_column(tr("Check"))
+    t.add_column(tr("Status"))
+    t.add_column(tr("Unlocks"))
 
     def row(name, ok, unlocks, note=""):
-        t.add_row(name, ("[green]ok[/] " if ok else "[yellow]missing[/] ") + note, unlocks)
+        t.add_row(tr(name), ("[green]ok[/] " if ok else f"[yellow]{tr('missing')}[/] ") + note, tr(unlocks))
 
     row("Python + uv", True, "game, MCP, A2A, AGENTS.md, Skills", sys.version.split()[0])
     row("Model", bool(d.provider), "agent loop, reviewer, goose", d.provider.label() if d.provider else "; ".join(d.notes))
@@ -199,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--width", type=int, default=None)
         p.add_argument("--record", action="store_true", help="save live runs to replays/")
         p.add_argument("--ui", choices=["classic", "battle"], help="screen style (default classic, or BESTIARY_UI)")
+        p.add_argument("--pick", choices=["choose", "auto"], help="battle screens: you choose the creature (default) or the right one is already on the field (or BESTIARY_PICK)")
+        p.add_argument("--lang", choices=["es", "en"], help="language of the texts (default es, or BESTIARY_LANG)")
 
     play_args(sub.add_parser("play", help="play the game (default)"))
     play_args(sub.add_parser("record", help="run every encounter live and save replays"))

@@ -19,7 +19,9 @@ param(
   [switch]$Shell,
   [Alias('Host')][switch]$HostShell,   # -Host works; the variable cannot be named $Host (automatic variable)
   [switch]$Logs,
-  [switch]$Battle,   # the Pokemon-style battle screens (feat/battle-ui)
+  [switch]$Battle,   # the Pokemon-style battle screens
+  [ValidateSet('choose', 'auto')][string]$Pick,   # battle screens: you choose the creature (default) or the right one is already on the field
+  [ValidateSet('es', 'en')][string]$Lang,         # language of the texts (default es)
   [switch]$WhatIf
 )
 $ErrorActionPreference = 'Continue'
@@ -32,7 +34,13 @@ if ($HostShell) { $mode = 'host' }
 elseif ($Logs) { $mode = 'logs'; $remote = 'sudo tail -n 200 -F /var/log/bestiary-bootstrap.log' }
 elseif ($Doctor) { $mode = 'doctor'; $remote = "$exec bestiary doctor" }
 elseif ($Shell) { $mode = 'shell'; $remote = "$exec bash" }
-else { $mode = 'game'; $remote = if ($Battle) { "$exec bestiary play --ui battle" } else { "$exec bestiary" } }
+else {
+  $mode = 'game'
+  $extra = ''
+  if ($Pick) { $extra += " --pick $Pick" }
+  if ($Lang) { $extra += " --lang $Lang" }
+  $remote = if ($Battle) { "$exec bestiary play --ui battle$extra" } else { "$exec bestiary play$extra" }
+}
 
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) { Say 'aws CLI not found on PATH.' 'Red'; exit 1 }
 
