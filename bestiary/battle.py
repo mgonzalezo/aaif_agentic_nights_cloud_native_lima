@@ -397,7 +397,7 @@ def creatures_panel(ctx, number: str | None, at: int, chosen: str | None) -> Pan
     info.append(tr("WEAKNESS") + "  ", style="bold #5765ff")
     info.append(c["weakness"], style=RED)
     outer = Table.grid(padding=(0, 3), expand=True)
-    outer.add_column(width=30)
+    outer.add_column(width=38)   # "▶ Navaja Suiza ✓" and "Open Responses" side by side
     outer.add_column(ratio=1)
     outer.add_row(listing, info)
     head = Text(f"{opp}: {short}", style=f"bold {RED}", justify="left")
