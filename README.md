@@ -126,7 +126,7 @@ infra/aws/           CloudFormation, deploy/teardown/present/schedule-teardown s
 agent-router/        how to record the Agent Router replay
 docker/              sandbox image for OpenSandbox
 replays/             recorded real runs
-docs/                setup per OS, AWS deploy, battle screens, stage runbook and the presenter script
+docs/                setup per OS, AWS deploy, battle screens and the measured results
 ```
 
 ## Licence
